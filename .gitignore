@@ -1,0 +1,28 @@
+# 环境变量（含 LLM API key，禁止提交）
+.env
+
+# 本地数据库（含真实健康数据，隐私）
+data/
+
+# 运行日志
+server.log
+*.log
+
+# Python 缓存
+__pycache__/
+*.pyc
+*.egg-info/
+.venv/
+venv/
+
+# 个人 workspace 数据（记忆 / 草稿等）
+.workbuddy/
+
+# 个人启动脚本（含本地环境路径）
+start.bat
+
+# 系统 / 编辑器
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
