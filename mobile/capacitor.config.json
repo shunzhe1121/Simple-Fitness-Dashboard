@@ -1,0 +1,9 @@
+{
+  "appId": "com.shunzhe.fitdashboard",
+  "appName": "健身记录助手",
+  "webDir": "../pwa",
+  "webContentsDebuggingEnabled": false,
+  "android": {
+    "allowMixedContent": false
+  }
+}

@@ -26,3 +26,13 @@ start.bat
 Thumbs.db
 .idea/
 .vscode/
+
+# Capacitor / Android 构建产物（源码保留，产物排除）
+mobile/node_modules/
+mobile/npm-cache/
+mobile/android/.gradle/
+mobile/android/build/
+mobile/android/app/build/
+mobile/android/capacitor-cordova-android-plugins/build/
+mobile/android/app/src/main/assets/public/
+*.apk
