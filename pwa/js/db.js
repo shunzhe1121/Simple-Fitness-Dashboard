@@ -433,6 +433,16 @@
       if (!RECORD_TYPES[r.type]) throw new Error("导入数据包含未知记录类型：" + r.type);
     });
 
+    // 去重键 = 类型 + 原 id（sourceTypeId）。桌面版各类型独立自增 id，跨类型 id 会重复，
+    // 不能只看 id；手机版自己新增的记录没有 sourceTypeId，靠「id 是否被占用」来避免覆盖。
+    var sourceMap = {};
+    if (!replace) {
+      var existingAll = await getAll(tx(db, "records", "readonly"));
+      existingAll.forEach(function (r) {
+        if (r.sourceTypeId) sourceMap[r.sourceTypeId] = r;
+      });
+    }
+
     if (replace) {
       // 全量替换：清空后重建（保留自增位）
       var storeAll = tx(db, "records", "readwrite");
@@ -449,13 +459,20 @@
       cleaned.type = raw.type;
       cleaned.createdAt = raw.createdAt || FitUtils.nowStr();
       cleaned.deletedAt = raw.deletedAt || null;
-      if (raw.id !== undefined && raw.id !== null) {
-        cleaned.id = raw.id;
-        if (!replace) {
-          // 并集语义：未删除的同 id 记录跳过（重复导入同一备份不会产生重复记录）；
-          // 但软删除（deletedAt）的记录视为不存在，重新写入相当于「恢复」。
-          var exists = await get(store, raw.id);
-          if (exists && !exists.deletedAt) continue;
+
+      var sourceKey = (raw.id !== undefined && raw.id !== null) ? (raw.type + ":" + raw.id) : null;
+      if (sourceKey) {
+        cleaned.sourceTypeId = sourceKey;
+        var existing = sourceMap[sourceKey];
+        if (existing) {
+          // 同类型同原 id：追加模式下未删除的跳过（真正的重复）；已删除则复用 id 恢复
+          if (!replace && !existing.deletedAt) continue;
+          cleaned.id = existing.id;
+        } else {
+          // 无同源记录：若 id 已被任意记录占用（跨类型 id 冲突或本地记录撞 id），重新自增
+          var idHolder = await get(store, raw.id);
+          if (idHolder) delete cleaned.id;
+          else cleaned.id = raw.id;
         }
       }
       await put(store, cleaned);
