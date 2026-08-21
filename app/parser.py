@@ -189,7 +189,7 @@ def _build_diet(fields: dict, default_date: str) -> dict:
     )
 
     return {
-        "date": utils.resolve_date(fields.get("date")) or default_date,
+        "date": utils.resolve_date(fields.get("date"), default_today=False) or default_date,
         "meal_type": meal,
         "food_name": fields.get("food_name"),
         "amount": fields.get("amount"),
@@ -217,7 +217,7 @@ def _build_workout(fields: dict, default_date: str) -> dict:
     note = " / ".join(n for n in notes if n) or None
 
     return {
-        "date": utils.resolve_date(fields.get("date")) or default_date,
+        "date": utils.resolve_date(fields.get("date"), default_today=False) or default_date,
         "category": category,
         "duration_min": utils.to_float(fields.get("duration_min")),
         "calories": utils.to_float(fields.get("calories")),
@@ -228,7 +228,7 @@ def _build_workout(fields: dict, default_date: str) -> dict:
 def _build_body(fields: dict, default_date: str) -> dict:
     """组装一条身体数据记录。"""
     return {
-        "date": utils.resolve_date(fields.get("date")) or default_date,
+        "date": utils.resolve_date(fields.get("date"), default_today=False) or default_date,
         "weight": utils.to_float(fields.get("weight")),
         "body_fat": utils.to_float(fields.get("body_fat")),
         "waist": utils.to_float(fields.get("waist")),

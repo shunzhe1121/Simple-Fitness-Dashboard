@@ -87,6 +87,8 @@
 
         // 日期
         selectedDate: "",
+        // 页面加载当天（跨天检测用：停留在加载日时自动跳到新的一天）
+        loadDate: "",
 
         // 元信息与全局状态
         meta: { record_types: {}, options: {}, llm: {}, today: "" },
@@ -279,9 +281,14 @@
       this.bootstrap();
       // ESC 关闭浮窗
       window.addEventListener("keydown", this.onKeyDown);
+      // 跨天检测：bfcache 恢复 / 切回前台时，若页面还停留在加载当天则自动跳到新的一天
+      window.addEventListener("pageshow", this.onPageShow);
+      document.addEventListener("visibilitychange", this.onVisibilityChange);
     },
     beforeUnmount() {
       window.removeEventListener("keydown", this.onKeyDown);
+      window.removeEventListener("pageshow", this.onPageShow);
+      document.removeEventListener("visibilitychange", this.onVisibilityChange);
     },
     watch: {
       theme() { this.applyTheme(); },
@@ -290,6 +297,29 @@
     methods: {
       onKeyDown(e) {
         if (e.key === "Escape" && this.chatOpen) this.chatOpen = false;
+      },
+      // 页面从 bfcache 恢复（前进/后退/重开标签）时触发，persisted=true 表示页面未重新加载
+      onPageShow(e) {
+        if (e.persisted) this.syncDateIfCrossDay();
+      },
+      onVisibilityChange() {
+        if (document.visibilityState === "visible") this.syncDateIfCrossDay();
+      },
+      // 跨天检测：若用户仍停留在「页面加载当天」且今天已变化，自动跳到今天。
+      // 用户手动选过历史日期（selectedDate !== loadDate）时不动，避免打断补录。
+      async syncDateIfCrossDay() {
+        if (!this.loadDate) return;
+        try {
+          const meta = await this.api("/api/meta");
+          const today = meta.today || "";
+          if (!today || today === this.loadDate) return;
+          if (this.selectedDate !== this.loadDate) return;
+          this.selectedDate = today;
+          this.loadDate = today;
+          await this.refreshData();
+        } catch (e) {
+          /* 网络抖动静默，下次可见时再试 */
+        }
       },
       // ---------------------------------------------------------- 基础请求
       async api(path, body, method) {
@@ -357,6 +387,7 @@
           this.meta = await this.api("/api/meta");
           this.llmReady = !!(this.meta.llm && this.meta.llm.configured);
           this.selectedDate = this.meta.today || "";
+          this.loadDate = this.selectedDate;
         } catch (e) {
           this.notify({ text: "加载元信息失败：" + e.message, tone: "error" });
         }

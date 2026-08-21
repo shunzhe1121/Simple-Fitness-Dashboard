@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a0a0a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<title>健身记录助手</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app" class="app" :data-theme="theme === 'auto' ? null : theme" v-cloak>
+
+  <div class="scrim" v-if="navOpen" @click="navOpen = false"></div>
+
+  <!-- 左侧导航 -->
+  <aside class="sidebar" :class="{ open: navOpen }">
+    <div class="brand">
+      <span class="brand-mark"></span>
+      <span>健身记录助手</span>
+    </div>
+    <nav class="nav">
+      <button v-for="item in navItems" :key="item.key"
+              class="nav-item" :class="{ active: view === item.key }"
+              @click="go(item.key)">
+        <span class="nav-dot" :style="{ background: item.color }"></span>
+        <span>{{ item.label }}</span>
+      </button>
+    </nav>
+    <div class="sidebar-foot">
+      <div class="llm-chip" :class="llmReady ? 'on' : 'off'">
+        {{ llmReady ? 'LLM 已接入' : 'LLM 未配置' }}
+      </div>
+      <button class="ghost-btn" @click="cycleTheme">外观：{{ themeLabel }}</button>
+    </div>
+  </aside>
+
+  <!-- 主内容区 -->
+  <main class="main">
+    <header class="topbar">
+      <button class="icon-btn only-mobile" @click="navOpen = true">导航</button>
+      <h1>{{ currentNav.label }}</h1>
+      <div class="topbar-right">
+        <input type="date" v-model="selectedDate" @change="onDateChange" class="date-input"
+               v-if="['today','diet','workout','body'].includes(view)">
+      </div>
+    </header>
+
+    <div class="scroll">
+
+      <!-- 今日总览 -->
+      <section v-if="view === 'today'" class="page">
+        <div class="grid-3">
+          <div class="card ring-card">
+            <div class="card-title">热量摄入</div>
+            <div class="ring-wrap">
+              <svg viewBox="0 0 120 120" class="ring">
+                <circle cx="60" cy="60" r="52" class="ring-track"></circle>
+                <circle cx="60" cy="60" r="52" class="ring-fill"
+                        :style="ringStyle"></circle>
+              </svg>
+              <div class="ring-text">
+                <strong>{{ fmt(summary.diet.total.calories, 0) }}</strong>
+                <span v-if="effectiveGoal">/ {{ fmt(effectiveGoal, 0) }} kcal</span>
+                <span v-else>kcal</span>
+                <button class="info-btn inline" @click="showGoalInfo = !showGoalInfo" title="目标如何计算">?</button>
+              </div>
+            </div>
+            <div class="ring-bonus" v-if="workoutBonus">
+              <span>含训练加成 +{{ fmt(workoutBonus, 0) }} kcal（{{ fmt(goalCalories, 0) }} + 训练消耗）</span>
+            </div>
+            <div class="goal-pop" v-if="showGoalInfo">
+              <div class="goal-pop-title">每日热量目标如何计算</div>
+              <table class="goal-pop-table">
+                <thead><tr><th>步骤</th><th>公式</th><th>示例（你的数据）</th></tr></thead>
+                <tbody>
+                  <tr><td>① BMR 基础代谢</td><td>Mifflin-St Jeor</td><td>{{ fmt(summary.body && summary.body.weight ? summary.body.weight : (profile && profile.latest_weight), 1) || '—' }} kg · 你的 BMR</td></tr>
+                  <tr><td>② TDEE 每日总消耗</td><td>BMR × 活动系数</td><td>BMR × {{ (goals && goals.activity_factor) || '1.2' }} ≈ {{ fmt(summary.tdee, 0) }} kcal</td></tr>
+                  <tr><td>③ 每日目标</td><td>TDEE × 目标系数</td><td>{{ fmt(summary.tdee, 0) }} × {{ goals && goals.goal_ratio ? goals.goal_ratio : '1.10' }} ≈ {{ fmt(goalCalories, 0) }} kcal</td></tr>
+                  <tr><td>④ 有效目标</td><td>每日目标 + 训练消耗</td><td>{{ fmt(goalCalories, 0) }} + {{ fmt(workoutBonus, 0) }} = {{ fmt(effectiveGoal, 0) }} kcal</td></tr>
+                </tbody>
+              </table>
+              <div class="goal-pop-note">活动系数：久坐 1.2 · 轻度 1.375 · 中度 1.55 · 高强度 1.725<br>目标系数：减脂 ×0.80 · 维持 ×1.00 · 增肌 ×1.10</div>
+            </div>
+            <div class="deficit-box" v-if="summary.tdee">
+              <div class="deficit-line">
+                <span>今日热量缺口</span>
+                <strong :style="{ color: deficitColor }">{{ deficitDisplay }}</strong>
+              </div>
+              <div class="deficit-side">
+                <span class="deficit-badge" :style="{ background: deficitColor }" v-if="deficitBand">{{ deficitBand.label }}</span>
+                <button class="info-btn" @click="showDeficitInfo = !showDeficitInfo" title="缺口是什么意思">?</button>
+              </div>
+            </div>
+            <div class="deficit-pop" v-if="showDeficitInfo && summary.tdee">
+              <div class="deficit-pop-title">缺口 = 有效目标 − 净摄入（饮食 − 运动消耗）</div>
+              <div v-for="b in deficitRef" :key="b.label" class="deficit-pop-row">
+                <span class="deficit-pop-range" :style="{ color: toneColor(b.tone) }">{{ b.range }}</span>
+                <span class="deficit-pop-label">{{ b.label }}</span>
+                <span class="deficit-pop-desc">{{ b.desc }}</span>
+              </div>
+            </div>
+            <div class="deficit-box muted" v-if="!summary.tdee">
+              <span>建立档案后自动显示热量缺口</span>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">今日概况</div>
+            <div class="stat-rows">
+              <div class="stat-row">
+                <span>训练时长</span>
+                <strong>{{ fmt(summary.workout.total.duration_min, 0) }} min</strong>
+              </div>
+              <div class="stat-row">
+                <span>训练消耗</span>
+                <strong>{{ fmt(summary.workout.total.calories, 0) }} kcal</strong>
+              </div>
+              <div class="stat-row">
+                <span>净热量</span>
+                <strong>{{ fmt(netCalories, 0) }} kcal</strong>
+              </div>
+              <div class="stat-row">
+                <span>体重</span>
+                <strong v-if="summary.body && summary.body.weight">{{ fmt(summary.body.weight, 1) }} kg</strong>
+                <strong v-else class="muted">未记录</strong>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">三大宏量</div>
+            <div class="macro-list">
+              <div class="macro" v-for="m in macroBars" :key="m.key">
+                <div class="macro-head">
+                  <span>{{ m.label }}</span>
+                  <span class="macro-num">
+                    {{ fmt(m.value, 1) }}<template v-if="m.goal"> / {{ fmt(m.goal, 0) }}</template> g
+                  </span>
+                </div>
+                <div class="bar"><div class="bar-fill" :style="{ width: m.percent + '%', background: m.color }"></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-title">今日饮食 <span class="count">{{ summary.diet.records.length }}</span></div>
+            <div v-if="!summary.diet.records.length" class="empty">还没有记录</div>
+            <div v-for="group in dietGroups" :key="group.name" class="meal-group">
+              <div class="meal-name">{{ group.name }}<span class="meal-cal">{{ fmt(group.calories, 0) }} kcal</span></div>
+              <div v-for="row in group.rows" :key="row.id" class="row-item">
+                <div class="row-main">
+                  <span class="row-title">{{ row.food_name }}</span>
+                  <span class="row-sub" v-if="row.amount">{{ row.amount }}</span>
+                </div>
+                <span class="row-value">{{ fmt(row.calories, 0) }}</span>
+                <button class="del-btn" @click="removeRecord('diet', row)">删除</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">今日训练 <span class="count">{{ summary.workout.records.length }}</span></div>
+            <div v-if="!summary.workout.records.length" class="empty">还没有记录</div>
+            <div v-for="row in summary.workout.records" :key="row.id" class="row-item">
+              <div class="row-main">
+                <span class="row-title">{{ row.category }}</span>
+                <span class="row-sub" v-if="row.duration_min">{{ fmt(row.duration_min, 0) }} min</span>
+              </div>
+              <span class="row-value">{{ fmt(row.calories, 0) }}</span>
+              <button class="del-btn" @click="removeRecord('workout', row)">删除</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 饮食记录 -->
+      <section v-else-if="view === 'diet'" class="page">
+        <div class="card">
+        <div class="card-title">
+          粘贴识图结果
+          <button class="link-btn" @click="copyPrompt">复制识图提示词</button>
+        </div>
+        <p class="hint">
+          把按模板输出的文本整段贴进来，本地规则直接解析，不消耗 LLM 额度。
+        </p>
+          <textarea v-model="pasteText" rows="6" class="textarea"
+                    placeholder="###&#10;餐次: 午餐&#10;食物: 米饭&#10;分量: 150g&#10;卡路里: 174&#10;蛋白质: 3.5&#10;脂肪: 0.4&#10;碳水: 38.5&#10;###"></textarea>
+          <div class="btn-row">
+            <button class="primary-btn" :disabled="!pasteText.trim() || busy" @click="importPaste">解析并记录</button>
+            <button class="ghost-btn" :disabled="!pasteText.trim() || busy" @click="previewPaste">先预览</button>
+            <button class="ghost-btn" v-if="pasteText" @click="pasteText = ''; parsePreview = null">清空</button>
+          </div>
+          <div v-if="parsePreview" class="preview">
+            <div class="preview-title">解析结果</div>
+            <div v-for="(rows, type) in previewGroups" :key="type" class="preview-group">
+              <div class="preview-type">{{ meta.record_types[type] }} {{ rows.length }} 条</div>
+              <div v-for="(row, i) in rows" :key="i" class="preview-row">{{ describePreview(type, row) }}</div>
+            </div>
+            <div v-for="(w, i) in parsePreview.warnings" :key="'w' + i" class="preview-warn">{{ w }}</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">手动添加</div>
+          <div class="form-grid">
+            <label>餐次
+              <select v-model="dietForm.meal_type">
+                <option v-for="m in meals" :key="m" :value="m">{{ m }}</option>
+              </select>
+            </label>
+            <label>食物<input v-model="dietForm.food_name" placeholder="鸡胸肉"></label>
+            <label>分量<input v-model="dietForm.amount" placeholder="150g"></label>
+            <label>卡路里<input v-model="dietForm.calories" type="number" step="1"></label>
+            <label>蛋白质 g<input v-model="dietForm.protein" type="number" step="0.1"></label>
+            <label>脂肪 g<input v-model="dietForm.fat" type="number" step="0.1"></label>
+            <label>碳水 g<input v-model="dietForm.carbs" type="number" step="0.1"></label>
+          </div>
+          <div class="btn-row">
+            <button class="primary-btn" :disabled="!dietForm.food_name || busy" @click="submitForm('diet')">添加</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">{{ selectedDate }} 的记录 <span class="count">{{ records.diet.length }}</span></div>
+          <div v-if="!records.diet.length" class="empty">这天没有饮食记录</div>
+          <table v-else class="table">
+            <thead><tr><th>餐次</th><th>食物</th><th>分量</th><th class="num">kcal</th><th class="num">蛋白</th><th class="num">脂肪</th><th class="num">碳水</th><th></th></tr></thead>
+            <tbody>
+              <tr v-for="row in records.diet" :key="row.id">
+                <template v-if="isEditing('diet', row.id)">
+                  <td>
+                    <select v-model="editing.draft.meal_type" class="mini-input">
+                      <option v-for="m in meals" :key="m" :value="m">{{ m }}</option>
+                    </select>
+                  </td>
+                  <td><input v-model="editing.draft.food_name" class="mini-input"></td>
+                  <td><input v-model="editing.draft.amount" class="mini-input"></td>
+                  <td class="num"><input v-model="editing.draft.calories" type="number" step="1" class="mini-input num"></td>
+                  <td class="num"><input v-model="editing.draft.protein" type="number" step="0.1" class="mini-input num"></td>
+                  <td class="num"><input v-model="editing.draft.fat" type="number" step="0.1" class="mini-input num"></td>
+                  <td class="num"><input v-model="editing.draft.carbs" type="number" step="0.1" class="mini-input num"></td>
+                  <td class="row-actions">
+                    <button class="ok-btn" :disabled="!editing.draft.food_name || busy" @click="saveEdit('diet')">保存</button>
+                    <button class="ghost-btn" @click="cancelEdit">取消</button>
+                  </td>
+                </template>
+                <template v-else>
+                  <td>{{ row.meal_type || '—' }}</td>
+                  <td>{{ row.food_name }}</td>
+                  <td class="dim">{{ row.amount || '—' }}</td>
+                  <td class="num">{{ fmt(row.calories, 0) }}</td>
+                  <td class="num dim">{{ fmt(row.protein, 1) }}</td>
+                  <td class="num dim">{{ fmt(row.fat, 1) }}</td>
+                  <td class="num dim">{{ fmt(row.carbs, 1) }}</td>
+                  <td class="row-actions">
+                    <button class="edit-btn" @click="startEdit('diet', row)">编辑</button>
+                    <button class="del-btn" @click="removeRecord('diet', row)">删除</button>
+                  </td>
+                </template>
+              </tr>
+            </tbody>
+            <tfoot><tr><td colspan="3">合计</td><td class="num">{{ fmt(sumOf(records.diet, 'calories'), 0) }}</td>
+              <td class="num">{{ fmt(sumOf(records.diet, 'protein'), 1) }}</td>
+              <td class="num">{{ fmt(sumOf(records.diet, 'fat'), 1) }}</td>
+              <td class="num">{{ fmt(sumOf(records.diet, 'carbs'), 1) }}</td><td></td></tr></tfoot>
+          </table>
+        </div>
+      </section>
+
+      <!-- 训练记录 -->
+      <section v-else-if="view === 'workout'" class="page">
+        <div class="card">
+          <div class="card-title">添加训练</div>
+          <p class="hint">最简结构：部位、时长、消耗。也可以直接在右侧对话栏说「今天练胸 40min 消耗 300kcal」。</p>
+          <div class="form-grid">
+            <label>部位
+              <select v-model="workoutForm.category">
+                <option v-for="c in categories" :key="c" :value="c">{{ c }}</option>
+              </select>
+            </label>
+            <label>时长 min<input v-model="workoutForm.duration_min" type="number" step="1"></label>
+            <label>消耗 kcal<input v-model="workoutForm.calories" type="number" step="1"></label>
+            <label class="wide">备注<input v-model="workoutForm.note" placeholder="可留空"></label>
+          </div>
+          <div class="btn-row">
+            <button class="primary-btn" :disabled="!workoutForm.category || busy" @click="submitForm('workout')">添加</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">{{ selectedDate }} 的记录 <span class="count">{{ records.workout.length }}</span></div>
+          <div v-if="!records.workout.length" class="empty">这天没有训练记录</div>
+          <table v-else class="table">
+            <thead><tr><th>部位</th><th class="num">min</th><th class="num">kcal</th><th>备注</th><th></th></tr></thead>
+            <tbody>
+              <tr v-for="row in records.workout" :key="row.id">
+                <template v-if="isEditing('workout', row.id)">
+                  <td>
+                    <select v-model="editing.draft.category" class="mini-input">
+                      <option v-for="c in categories" :key="c" :value="c">{{ c }}</option>
+                    </select>
+                  </td>
+                  <td class="num"><input v-model="editing.draft.duration_min" type="number" step="1" class="mini-input num"></td>
+                  <td class="num"><input v-model="editing.draft.calories" type="number" step="1" class="mini-input num"></td>
+                  <td><input v-model="editing.draft.note" class="mini-input"></td>
+                  <td class="row-actions">
+                    <button class="ok-btn" :disabled="!editing.draft.category || busy" @click="saveEdit('workout')">保存</button>
+                    <button class="ghost-btn" @click="cancelEdit">取消</button>
+                  </td>
+                </template>
+                <template v-else>
+                  <td>{{ row.category }}</td>
+                  <td class="num">{{ fmt(row.duration_min, 0) }}</td>
+                  <td class="num">{{ fmt(row.calories, 0) }}</td>
+                  <td class="dim">{{ row.note || '—' }}</td>
+                  <td class="row-actions">
+                    <button class="edit-btn" @click="startEdit('workout', row)">编辑</button>
+                    <button class="del-btn" @click="removeRecord('workout', row)">删除</button>
+                  </td>
+                </template>
+              </tr>
+            </tbody>
+            <tfoot><tr><td>合计</td>
+              <td class="num">{{ fmt(sumOf(records.workout, 'duration_min'), 0) }}</td>
+              <td class="num">{{ fmt(sumOf(records.workout, 'calories'), 0) }}</td><td></td><td></td></tr></tfoot>
+          </table>
+        </div>
+      </section>
+
+      <!-- 身体数据 -->
+      <section v-else-if="view === 'body'" class="page">
+        <div class="card">
+          <div class="card-title">记录身体数据</div>
+          <div class="form-grid">
+            <label>体重 kg<input v-model="bodyForm.weight" type="number" step="0.1"></label>
+            <label>体脂 %<input v-model="bodyForm.body_fat" type="number" step="0.1"></label>
+            <label>腰围 cm<input v-model="bodyForm.waist" type="number" step="0.1"></label>
+          </div>
+          <div class="btn-row">
+            <button class="primary-btn" :disabled="busy" @click="submitForm('body')">记录</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">体重趋势 <span class="dim">最近 {{ bodyRangeDays }} 天</span></div>
+          <div class="range-tabs">
+            <button v-for="d in [14, 30, 90]" :key="d" :class="{ on: bodyRangeDays === d }"
+                    @click="bodyRangeDays = d; loadBodyTrend()">{{ d }} 天</button>
+          </div>
+          <div class="chart-wrap"><canvas ref="bodyChart"></canvas></div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">历史记录</div>
+          <div v-if="!bodyHistory.length" class="empty">还没有身体数据</div>
+          <table v-else class="table">
+            <thead><tr><th>日期</th><th class="num">体重 kg</th><th class="num">体脂 %</th><th class="num">腰围 cm</th><th></th></tr></thead>
+            <tbody>
+              <tr v-for="row in bodyHistory" :key="row.id">
+                <template v-if="isEditing('body', row.id)">
+                  <td><input v-model="editing.draft.date" type="date" class="mini-input"></td>
+                  <td class="num"><input v-model="editing.draft.weight" type="number" step="0.1" class="mini-input num"></td>
+                  <td class="num"><input v-model="editing.draft.body_fat" type="number" step="0.1" class="mini-input num"></td>
+                  <td class="num"><input v-model="editing.draft.waist" type="number" step="0.1" class="mini-input num"></td>
+                  <td class="row-actions">
+                    <button class="ok-btn" :disabled="busy" @click="saveEdit('body')">保存</button>
+                    <button class="ghost-btn" @click="cancelEdit">取消</button>
+                  </td>
+                </template>
+                <template v-else>
+                  <td>{{ row.date }}</td>
+                  <td class="num">{{ fmt(row.weight, 1) }}</td>
+                  <td class="num dim">{{ fmt(row.body_fat, 1) }}</td>
+                  <td class="num dim">{{ fmt(row.waist, 1) }}</td>
+                  <td class="row-actions">
+                    <button class="edit-btn" @click="startEdit('body', row)">编辑</button>
+                    <button class="del-btn" @click="removeRecord('body', row)">删除</button>
+                  </td>
+                </template>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 统计分析 -->
+      <section v-else-if="view === 'stats'" class="page">
+        <div class="range-tabs">
+          <button v-for="d in [7, 14, 30, 90]" :key="d" :class="{ on: statsDays === d }"
+                  @click="statsDays = d; loadStats()">最近 {{ d }} 天</button>
+        </div>
+
+        <div class="kpi-grid">
+          <div class="kpi" v-for="k in kpis" :key="k.label">
+            <span class="kpi-label">{{ k.label }}</span>
+            <strong class="kpi-value">{{ k.value }}</strong>
+            <span class="kpi-unit">{{ k.unit }}</span>
+          </div>
+        </div>
+
+        <div class="card chart-card">
+          <div class="card-title">热量摄入与训练消耗</div>
+          <div class="chart-wrap"><canvas ref="calorieChart"></canvas></div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card chart-card is-short">
+            <div class="card-title">宏量热量占比</div>
+            <div class="chart-wrap"><canvas ref="macroChart"></canvas></div>
+          </div>
+          <div class="card chart-card is-short">
+            <div class="card-title">训练部位分布 <span class="dim">min</span></div>
+            <div class="chart-wrap"><canvas ref="categoryChart"></canvas></div>
+          </div>
+        </div>
+
+        <div class="card chart-card">
+          <div class="card-title">体重变化</div>
+          <div class="chart-wrap"><canvas ref="weightChart"></canvas></div>
+        </div>
+      </section>
+
+      <!-- 设置 -->
+      <section v-else-if="view === 'settings'" class="page">
+        <div class="card">
+          <div class="card-title">个人资料</div>
+          <div class="form-grid">
+            <label>身高 cm<input v-model="profileForm.height" type="number" step="0.1"></label>
+            <label>出生年份<input v-model="profileForm.birth_year" type="number" step="1" placeholder="1998"></label>
+            <label>性别
+              <select v-model="profileForm.gender">
+                <option value="male">男</option>
+                <option value="female">女</option>
+              </select>
+            </label>
+            <label>活动水平
+              <select v-model="profileForm.activity_level">
+                <option v-for="o in meta.options.activity_levels" :key="o.value" :value="o.value">{{ o.label }}</option>
+              </select>
+            </label>
+            <label>目标
+              <select v-model="profileForm.goal_type">
+                <option v-for="o in meta.options.goal_types" :key="o.value" :value="o.value">{{ o.label }}</option>
+              </select>
+            </label>
+          </div>
+          <div class="btn-row">
+            <button class="ghost-btn" :disabled="busy" @click="saveProfile">保存资料</button>
+            <button class="primary-btn" :disabled="busy" @click="calcGoals">按资料推算目标</button>
+          </div>
+          <div v-if="planExplain" class="explain">{{ planExplain }}</div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">每日目标</div>
+          <div class="form-grid">
+            <label>热量 kcal<input v-model="goalsForm.daily_calories" type="number" step="1"></label>
+            <label>蛋白质 g<input v-model="goalsForm.protein_g" type="number" step="1"></label>
+            <label>脂肪 g<input v-model="goalsForm.fat_g" type="number" step="1"></label>
+            <label>碳水 g<input v-model="goalsForm.carbs_g" type="number" step="1"></label>
+            <label>目标体重 kg<input v-model="goalsForm.target_weight" type="number" step="0.1"></label>
+            <label>每周训练天数<input v-model="goalsForm.workout_days_per_week" type="number" step="1"></label>
+          </div>
+          <div class="btn-row">
+            <button class="primary-btn" :disabled="busy" @click="saveGoals">保存目标</button>
+          </div>
+          <div class="dim small" v-if="goals.bmr">
+            基础代谢 {{ fmt(goals.bmr, 0) }} kcal · 每日总消耗 {{ fmt(goals.tdee, 0) }} kcal
+          </div>
+        </div>
+
+        <div class="card">
+        <div class="card-title">
+          识图提示词
+          <button class="link-btn" @click="copyPrompt">复制</button>
+        </div>
+        <p class="hint">发给视觉大模型，让它按这个格式输出，回来直接粘到饮食页即可。</p>
+          <pre class="code">{{ meta.doubao_prompt }}</pre>
+        </div>
+
+        <div class="card">
+          <div class="card-title">LLM 接入 <span class="dim">（可选，key 仅存本机）</span></div>
+          <div class="stat-rows">
+            <div class="stat-row"><span>状态</span><strong :class="llmReady ? 'ok' : 'warn'">{{ llmReady ? '已配置' : '未配置' }}</strong></div>
+          </div>
+          <div class="form-grid">
+            <label class="full">API Key<input v-model="llmForm.api_key" type="password" placeholder="sk-..."></label>
+            <label>接口地址<input v-model="llmForm.base_url" placeholder="https://api.siliconflow.cn/v1"></label>
+            <label>模型<input v-model="llmForm.model" placeholder="deepseek-ai/DeepSeek-V3"></label>
+          </div>
+          <div class="btn-row">
+            <button class="primary-btn" @click="saveLlm">保存 AI 配置</button>
+          </div>
+          <p class="hint">
+            填 OpenAI 兼容接口（如 SiliconFlow）的 API Key 后，AI 对话可用。
+            不填则仅使用本地记录/解析/统计功能。数据全部存在本机。
+          </p>
+        </div>
+
+        <div class="card">
+          <div class="card-title">数据管理 <span class="dim">（备份 / 迁移 / 分享）</span></div>
+          <div class="btn-row">
+            <button class="ghost-btn" @click="exportData">导出全部 JSON</button>
+            <label class="file-btn">
+              导入 JSON 备份
+              <input type="file" accept=".json" @click="event => event.target.value = ''" @change="importData" hidden>
+            </label>
+            <button class="ghost-btn" @click="loadTrash">查看回收站</button>
+          </div>
+          <p class="hint">导出文件含档案、目标与全部记录（含回收站）。发给你认识的人，对方导入后即可用同一套数据。</p>
+          <div v-if="trashLoaded" class="preview">
+            <div class="preview-title">回收站</div>
+            <div v-for="(rows, type) in trash" :key="type" class="preview-group">
+              <div class="preview-type">{{ meta.record_types[type] }} {{ rows.length }} 条</div>
+              <div v-for="row in rows" :key="row.id" class="preview-row">
+                <span>{{ row.date }} · {{ row.food_name || row.category || ('体重 ' + (row.weight || '—')) }}</span>
+                <button class="link-btn" @click="restoreRecord(type, row)">恢复</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- 悬浮助手按钮 -->
+  <button class="fab" @click="chatOpen = !chatOpen" aria-label="助手" title="助手">💬</button>
+
+  <!-- 悬浮助手遮罩 -->
+  <div class="float-overlay" :class="{ open: chatOpen }" @click="chatOpen = false"></div>
+
+  <!-- 悬浮助手窗口 -->
+  <div class="float-chat" :class="{ open: chatOpen }">
+    <div class="chat-head">
+      <span>助手</span>
+      <div>
+        <button class="link-btn" @click="clearChat">清空</button>
+        <button class="link-btn" @click="chatOpen = false">收起</button>
+      </div>
+    </div>
+
+    <div class="chat-body" ref="chatBody">
+      <div v-if="!chatMessages.length" class="chat-hint">
+        <div v-if="needOnboarding" class="onboard">
+          <p class="onboard-title">首次使用 · 先建立健康档案</p>
+          <p class="onboard-text">把身高、体重、年龄、性别告诉我，我就能帮你算出每天该吃多少（每日热量目标与蛋白 / 脂肪 / 碳水分配）。建档后，再说「记饮食」「记训练」就直接入库了。</p>
+          <div class="btn-row">
+            <button class="primary-btn" @click="startOnboarding">让助手引导建档</button>
+            <button class="ghost-btn" @click="go('settings')">去设置页手动填</button>
+          </div>
+        </div>
+        <template v-else>
+          <p>可以直接说：</p>
+          <button class="sample" v-for="s in samples" :key="s" @click="chatInput = s">{{ s }}</button>
+        </template>
+      </div>
+      <div v-for="(m, i) in chatMessages" :key="i" class="msg" :class="m.role">
+        <div class="bubble">{{ m.content }}</div>
+      </div>
+
+      <div v-for="p in pending" :key="'p' + p.id" class="confirm-card">
+        <div class="confirm-title">{{ p.summary }}</div>
+        <div class="confirm-list">
+          <div v-for="(line, j) in (p.records || [])" :key="j">{{ line }}</div>
+        </div>
+        <div class="btn-row">
+          <button class="danger-btn" @click="confirmPending(p.id)">确认删除</button>
+          <button class="ghost-btn" @click="cancelPending(p.id)">取消</button>
+        </div>
+      </div>
+
+      <div v-if="chatBusy" class="msg assistant"><div class="bubble typing">思考中…</div></div>
+    </div>
+
+    <div class="chat-input">
+      <textarea v-model="chatInput" rows="2" placeholder="说点什么，或粘贴识图输出的文本"
+                @keydown.enter.exact.prevent="sendChat"></textarea>
+      <button class="primary-btn" :disabled="!chatInput.trim() || chatBusy" @click="sendChat">发送</button>
+    </div>
+  </div>
+
+  <div class="toast" v-if="toast" :class="toast.tone">{{ toast.text }}</div>
+</div>
+
+<script src="vendor/vue.global.prod.js"></script>
+<script>
+if (!window.Vue) {
+  document.write('<script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js"><\/script>');
+}
+</script>
+<script src="vendor/chart.umd.min.js"></script>
+<script>
+if (!window.Chart) {
+  document.write('<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"><\/script>');
+}
+</script>
+<!-- 本地数据层：工具 / 营养 / 解析 / IndexedDB / Agent / API 分发 -->
+<script src="js/utils.js"></script>
+<script src="js/nutrition.js"></script>
+<script src="js/parser.js"></script>
+<script src="js/db.js"></script>
+<script src="js/agent.js"></script>
+<script src="js/localapi.js"></script>
+<script src="js/app.js"></script>
+<script>
+  // PWA：仅 https 或 localhost 下注册 Service Worker（离线缓存）
+  if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost" || location.hostname === "127.0.0.1")) {
+    navigator.serviceWorker.register("./sw.js").catch(function () { /* 注册失败不影响使用 */ });
+  }
+</script>
+</body>
+</html>
