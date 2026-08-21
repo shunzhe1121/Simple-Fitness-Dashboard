@@ -120,13 +120,11 @@ button, input, select, textarea {
 
 .app {
   display: grid;
-  grid-template-columns: 216px 1fr;
-  grid-template-rows: 100vh;
+  grid-template-columns: 1fr;
+  grid-template-rows: auto 1fr auto;
   height: 100vh;
   overflow: hidden;
 }
-
-.scrim { display: none; }
 
 /* ---------------- 左侧导航 ---------------- */
 
@@ -225,6 +223,7 @@ button, input, select, textarea {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  overflow-x: auto;        /* 卡片内宽表格（8 列饮食表等）在窄屏可横向滚动，避免操作列被挤出屏幕 */
 }
 
 .card-title {
@@ -525,16 +524,24 @@ button, input, select, textarea {
 .primary-btn:active { transform: scale(0.97); }
 .ghost-btn:hover, .icon-btn:hover, .file-btn:hover { background: var(--surface-3); color: var(--text); }
 .danger-btn:hover { filter: brightness(0.92); }
-/* disabled 用色阶变化而非透明度，避免白色按钮变浅灰 */
-.primary-btn:disabled, .ghost-btn:disabled {
-  background: var(--surface-2);
-  color: var(--text-3);
-  border-color: var(--border);
+/* disabled 用亮度/透明度变化而非换底色，避免深色下白底按钮变浅灰看不到 */
+.primary-btn:disabled {
+  background: var(--accent);
+  color: var(--surface);
+  opacity: 0.35;
   cursor: not-allowed;
   transform: none;
   filter: none;
 }
-.primary-btn:disabled { color: var(--text-3); }
+.ghost-btn:disabled {
+  background: var(--surface-2);
+  color: var(--text-3);
+  border-color: var(--border);
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  filter: none;
+}
 .file-btn { display: inline-block; }
 
 .link-btn {
@@ -706,7 +713,7 @@ code {
 
 .fab {
   position: fixed;
-  bottom: 22px;
+  bottom: 78px;                  /* 默认位置在底部 nav 上方，避免遮挡底部菜单栏 */
   right: 22px;
   width: 52px;
   height: 52px;
@@ -721,10 +728,85 @@ code {
   align-items: center;
   justify-content: center;
   box-shadow: 0 4px 14px rgba(0,0,0,.2);
-  transition: transform .15s ease, box-shadow .15s ease;
+  transition: transform .15s ease, box-shadow .15s ease, opacity .15s ease;
 }
 .fab:hover { transform: scale(1.06); box-shadow: 0 6px 20px rgba(0,0,0,.25); }
 .fab:active { transform: scale(.96); }
+.fab.hidden { display: none; }    /* chat 打开时隐藏，避免遮挡浮窗内输入框 */
+
+/* ---------------- 底部导航 ---------------- */
+
+.bottom-nav {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  padding: 6px 0 calc(env(safe-area-inset-bottom, 6px) + 6px);
+  z-index: 40;
+}
+.bnav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 6px 4px;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  color: var(--text-3);
+  font-size: 11px;
+  transition: color .12s, transform .1s;
+}
+.bnav-item:active { transform: scale(0.96); }
+.bnav-item.active { color: var(--accent); }
+.bnav-icon {
+  font-size: 20px;
+  line-height: 1;
+  font-weight: 300;
+}
+.bnav-label { font-size: 11px; }
+
+/* 记录页 sub-tabs（饮食 / 训练 / 身体） */
+.sub-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 0 2px 4px;
+}
+.sub-tabs button {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--text-2);
+  cursor: pointer;
+  font-size: 13px;
+  transition: background .12s, color .12s, border-color .12s;
+}
+.sub-tabs button:hover { background: var(--surface-2); }
+.sub-tabs button.on {
+  background: var(--accent);
+  color: var(--surface);
+  border-color: var(--accent);
+}
+
+/* 设置页折叠提示词 */
+.prompt-details {
+  margin-top: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+.prompt-details summary {
+  padding: 10px 14px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-2);
+  user-select: none;
+}
+.prompt-details summary:hover { color: var(--text); }
+.prompt-details .code { margin: 0; border-radius: 0 0 var(--radius-sm) var(--radius-sm); }
 
 .float-overlay {
   position: fixed;
@@ -869,36 +951,14 @@ code {
 /* ---------------- 移动端适配 ---------------- */
 
 @media (max-width: 1080px) {
-  .app { grid-template-columns: 200px 1fr; }
   .grid-3 { grid-template-columns: repeat(2, 1fr); }
 }
 
 @media (max-width: 900px) {
-  .app { grid-template-columns: 1fr; }
   .only-mobile { display: inline-block; }
 
-  .sidebar {
-    position: fixed;
-    top: 0;
-    bottom: 0;
-    left: 0;
-    width: 272px;
-    z-index: 50;
-    transform: translateX(-100%);
-    transition: transform .22s ease;
-  }
-  .sidebar.open { transform: translateX(0); }
-
-  .scrim {
-    display: block;
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,.35);
-    z-index: 40;
-  }
-
   .grid-2, .grid-3 { grid-template-columns: 1fr; }
-  .scroll { padding: 16px 14px 32px; }
+  .scroll { padding: 16px 14px 80px; }   /* 底部留够空间给底部 nav（约 64px）+ 一点缓冲 */
   .topbar { padding: 12px 14px; }
   .table { font-size: 12.5px; }
   .table th, .table td { padding: 6px 5px; }
@@ -908,7 +968,7 @@ code {
     right: 0;
     left: 0;
     width: 100%;
-    max-height: 80vh;
+    max-height: calc(80vh - 64px);        /* 浮窗底部留出底部 nav 高度，避免遮挡 */
     border-radius: var(--radius) var(--radius) 0 0;
     border-left: 0;
     border-right: 0;
@@ -916,7 +976,7 @@ code {
     transform: translateY(100%);
   }
   .float-chat.open { transform: translateY(0); }
-  .fab { bottom: 16px; right: 16px; }
+  .fab { bottom: 78px; right: 16px; }     /* 避开底部 nav */
 }
 
 @media (max-width: 560px) {

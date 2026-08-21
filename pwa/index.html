@@ -16,45 +16,22 @@
 <body>
 <div id="app" class="app" :data-theme="theme === 'auto' ? null : theme" v-cloak>
 
-  <div class="scrim" v-if="navOpen" @click="navOpen = false"></div>
-
-  <!-- 左侧导航 -->
-  <aside class="sidebar" :class="{ open: navOpen }">
-    <div class="brand">
-      <span class="brand-mark"></span>
-      <span>健身记录助手</span>
-    </div>
-    <nav class="nav">
-      <button v-for="item in navItems" :key="item.key"
-              class="nav-item" :class="{ active: view === item.key }"
-              @click="go(item.key)">
-        <span class="nav-dot" :style="{ background: item.color }"></span>
-        <span>{{ item.label }}</span>
+  <!-- 顶部栏 -->
+  <header class="topbar">
+    <h1>{{ currentNav.label }}</h1>
+    <div class="topbar-right">
+      <button class="theme-btn" @click="cycleTheme" :title="'外观：' + themeLabel" :aria-label="'切换外观，当前：' + themeLabel">
+        <span v-if="theme === 'auto'">🌓</span>
+        <span v-else-if="theme === 'light'">☀️</span>
+        <span v-else>🌙</span>
       </button>
-    </nav>
-    <div class="sidebar-foot">
-      <div class="llm-chip" :class="llmReady ? 'on' : 'off'">
-        {{ llmReady ? 'LLM 已接入' : 'LLM 未配置' }}
-      </div>
+      <input type="date" v-model="selectedDate" @change="onDateChange" class="date-input"
+             v-if="['today','records'].includes(view)">
     </div>
-  </aside>
+  </header>
 
   <!-- 主内容区 -->
   <main class="main">
-    <header class="topbar">
-      <button class="icon-btn only-mobile" @click="navOpen = true">导航</button>
-      <h1>{{ currentNav.label }}</h1>
-      <div class="topbar-right">
-        <button class="theme-btn" @click="cycleTheme" :title="'外观：' + themeLabel" :aria-label="'切换外观，当前：' + themeLabel">
-          <span v-if="theme === 'auto'">🌓</span>
-          <span v-else-if="theme === 'light'">☀️</span>
-          <span v-else>🌙</span>
-        </button>
-        <input type="date" v-model="selectedDate" @change="onDateChange" class="date-input"
-               v-if="['today','diet','workout','body'].includes(view)">
-      </div>
-    </header>
-
     <div class="scroll">
 
       <!-- 今日总览 -->
@@ -185,8 +162,16 @@
         </div>
       </section>
 
-      <!-- 饮食记录 -->
-      <section v-else-if="view === 'diet'" class="page">
+      <!-- 记录（合并原饮食 / 训练 / 身体三个页面，内部 sub-tab 切换） -->
+      <section v-else-if="view === 'records'" class="page">
+        <div class="sub-tabs">
+          <button :class="{ on: recordsTab === 'diet' }" @click="setRecordsTab('diet')">饮食</button>
+          <button :class="{ on: recordsTab === 'workout' }" @click="setRecordsTab('workout')">训练</button>
+          <button :class="{ on: recordsTab === 'body' }" @click="setRecordsTab('body')">身体</button>
+        </div>
+
+        <!-- 饮食 -->
+        <template v-if="recordsTab === 'diet'">
         <div class="card">
         <div class="card-title">
           粘贴识图结果
@@ -277,10 +262,10 @@
               <td class="num">{{ fmt(sumOf(records.diet, 'carbs'), 1) }}</td><td></td></tr></tfoot>
           </table>
         </div>
-      </section>
+        </template>
 
-      <!-- 训练记录 -->
-      <section v-else-if="view === 'workout'" class="page">
+        <!-- 训练 -->
+        <template v-if="recordsTab === 'workout'">
         <div class="card">
           <div class="card-title">添加训练</div>
           <p class="hint">最简结构：部位、时长、消耗。也可以直接在右侧对话栏说「今天练胸 40min 消耗 300kcal」。</p>
@@ -337,10 +322,10 @@
               <td class="num">{{ fmt(sumOf(records.workout, 'calories'), 0) }}</td><td></td><td></td></tr></tfoot>
           </table>
         </div>
-      </section>
+        </template>
 
-      <!-- 身体数据 -->
-      <section v-else-if="view === 'body'" class="page">
+        <!-- 身体 -->
+        <template v-if="recordsTab === 'body'">
         <div class="card">
           <div class="card-title">记录身体数据</div>
           <div class="form-grid">
@@ -393,6 +378,7 @@
             </tbody>
           </table>
         </div>
+        </template>
       </section>
 
       <!-- 统计分析 -->
@@ -434,8 +420,9 @@
 
       <!-- 设置 -->
       <section v-else-if="view === 'settings'" class="page">
+        <!-- 健康档案（原个人资料 + 每日目标合并） -->
         <div class="card">
-          <div class="card-title">个人资料</div>
+          <div class="card-title">健康档案</div>
           <div class="form-grid">
             <label>身高 cm<input v-model="profileForm.height" type="number" step="0.1"></label>
             <label>出生年份<input v-model="profileForm.birth_year" type="number" step="1" placeholder="1998"></label>
@@ -456,16 +443,8 @@
               </select>
             </label>
           </div>
-          <div class="btn-row">
-            <button class="ghost-btn" :disabled="busy" @click="saveProfile">保存资料</button>
-            <button class="primary-btn" :disabled="busy" @click="calcGoals">按资料推算目标</button>
-          </div>
-          <div v-if="planExplain" class="explain">{{ planExplain }}</div>
-        </div>
-
-        <div class="card">
-          <div class="card-title">每日目标</div>
-          <div class="form-grid">
+          <div class="dim small" style="margin-top: 12px;">每日目标（按上方资料推算后填入，可手动微调）</div>
+          <div class="form-grid" style="margin-top: 6px;">
             <label>热量 kcal<input v-model="goalsForm.daily_calories" type="number" step="1"></label>
             <label>蛋白质 g<input v-model="goalsForm.protein_g" type="number" step="1"></label>
             <label>脂肪 g<input v-model="goalsForm.fat_g" type="number" step="1"></label>
@@ -474,24 +453,19 @@
             <label>每周训练天数<input v-model="goalsForm.workout_days_per_week" type="number" step="1"></label>
           </div>
           <div class="btn-row">
-            <button class="primary-btn" :disabled="busy" @click="saveGoals">保存目标</button>
+            <button class="ghost-btn" :disabled="busy" @click="saveProfile">保存资料</button>
+            <button class="primary-btn" :disabled="busy" @click="calcGoals">按资料推算目标</button>
+            <button class="ghost-btn" :disabled="busy" @click="saveGoals">保存目标</button>
           </div>
-          <div class="dim small" v-if="goals.bmr">
+          <div v-if="planExplain" class="explain">{{ planExplain }}</div>
+          <div class="dim small" v-if="goals.bmr" style="margin-top: 8px;">
             基础代谢 {{ fmt(goals.bmr, 0) }} kcal · 每日总消耗 {{ fmt(goals.tdee, 0) }} kcal
           </div>
         </div>
 
+        <!-- AI 配置（原识图提示词 + LLM 接入合并） -->
         <div class="card">
-        <div class="card-title">
-          识图提示词
-          <button class="link-btn" @click="copyPrompt">复制</button>
-        </div>
-        <p class="hint">发给视觉大模型，让它按这个格式输出，回来直接粘到饮食页即可。</p>
-          <pre class="code">{{ meta.doubao_prompt }}</pre>
-        </div>
-
-        <div class="card">
-          <div class="card-title">LLM 接入 <span class="dim">（可选，key 仅存本机）</span></div>
+          <div class="card-title">AI 配置 <span class="dim">（可选，key 仅存本机）</span></div>
           <div class="stat-rows">
             <div class="stat-row"><span>状态</span><strong :class="llmReady ? 'ok' : 'warn'">{{ llmReady ? '已配置' : '未配置' }}</strong></div>
           </div>
@@ -502,13 +476,19 @@
           </div>
           <div class="btn-row">
             <button class="primary-btn" @click="saveLlm">保存 AI 配置</button>
+            <button class="link-btn" @click="copyPrompt">复制识图提示词</button>
           </div>
           <p class="hint">
             填 OpenAI 兼容接口（如 SiliconFlow）的 API Key 后，AI 对话可用。
             不填则仅使用本地记录/解析/统计功能。数据全部存在本机。
           </p>
+          <details class="prompt-details">
+            <summary>查看识图提示词</summary>
+            <pre class="code">{{ meta.doubao_prompt }}</pre>
+          </details>
         </div>
 
+        <!-- 数据管理 -->
         <div class="card">
           <div class="card-title">数据管理 <span class="dim">（备份 / 迁移 / 分享）</span></div>
           <div class="btn-row">
@@ -519,7 +499,7 @@
             </label>
             <button class="ghost-btn" @click="loadTrash">查看回收站</button>
           </div>
-          <p class="hint">导出文件含档案、目标与全部记录（含回收站）。发给你认识的人，对方导入后即可用同一套数据。</p>
+          <p class="hint">导出文件含档案、目标与全部记录（含回收站）。发给你认识的人，对方导入后即可用同一套数据。重复导入按 id 自动去重（并集合并）。</p>
           <div v-if="trashLoaded" class="preview">
             <div class="preview-title">回收站</div>
             <div v-for="(rows, type) in trash" :key="type" class="preview-group">
@@ -536,8 +516,18 @@
     </div>
   </main>
 
-  <!-- 悬浮助手按钮 -->
-  <button class="fab" @click="chatOpen = !chatOpen" aria-label="助手" title="助手">💬</button>
+  <!-- 底部导航（4 个 tab：总览 / 记录 / 分析 / 设置） -->
+  <nav class="bottom-nav">
+    <button v-for="item in navItems" :key="item.key"
+            class="bnav-item" :class="{ active: isNavActive(item.key) }"
+            @click="go(item.key)">
+      <span class="bnav-icon">{{ item.icon }}</span>
+      <span class="bnav-label">{{ item.label }}</span>
+    </button>
+  </nav>
+
+  <!-- 悬浮助手按钮（chat 打开时隐藏，避免遮挡浮窗输入框） -->
+  <button class="fab" :class="{ hidden: chatOpen }" @click="chatOpen = !chatOpen" aria-label="助手" title="助手">💬</button>
 
   <!-- 悬浮助手遮罩 -->
   <div class="float-overlay" :class="{ open: chatOpen }" @click="chatOpen = false"></div>

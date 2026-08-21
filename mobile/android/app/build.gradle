@@ -37,6 +37,11 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
             signingConfig signingConfigs.release
         }
+        // debug 也复用 release keystore，保证不同电脑构建的 APK 签名一致、可覆盖升级。
+        // 这样手机端多次安装不会因签名不同导致「未安装应用」问题。
+        debug {
+            signingConfig signingConfigs.release
+        }
     }
 }
 

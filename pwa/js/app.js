@@ -34,12 +34,10 @@
   }
 
   const NAV_ITEMS = [
-    { key: "today", label: "今日总览", color: "#2f6df6" },
-    { key: "diet", label: "饮食记录", color: "#f59e0b" },
-    { key: "workout", label: "训练记录", color: "#ef4444" },
-    { key: "body", label: "身体数据", color: "#10b981" },
-    { key: "stats", label: "统计分析", color: "#8b5cf6" },
-    { key: "settings", label: "设置", color: "#6b7280" },
+    { key: "today", label: "总览", icon: "○" },
+    { key: "records", label: "记录", icon: "✎" },
+    { key: "stats", label: "分析", icon: "▤" },
+    { key: "settings", label: "设置", icon: "⚙" },
   ];
 
   const MEALS = ["早餐", "午餐", "晚餐", "加餐"];
@@ -81,9 +79,10 @@
       return {
         // 导航与布局
         view: "today",
-        navOpen: false,
         chatOpen: false,
         theme: "auto",
+        // 记录页内部子 tab：diet / workout / body
+        recordsTab: "diet",
 
         // 日期
         selectedDate: "",
@@ -394,29 +393,40 @@
       },
 
       // ---------------------------------------------------------- 导航与主题
+      // 底部 nav 高亮判断：records tab 在三个子 tab 都高亮
+      isNavActive(key) {
+        if (key === "records") return ["records", "diet", "workout", "body"].indexOf(this.view) >= 0;
+        return this.view === key;
+      },
       go(key) {
         this.view = key;
-        this.navOpen = false;
         this.onEnterView(key);
       },
       onEnterView(key) {
         if (key === "today") this.loadToday();
-        else if (key === "diet") this.loadRecords("diet");
-        else if (key === "workout") this.loadRecords("workout");
-        else if (key === "body") {
-          this.loadBodyHistory();
-          this.loadBodyTrend();
-        } else if (key === "stats") this.loadStats();
+        else if (key === "records") this.loadCurrentRecordsTab();
+        else if (key === "stats") this.loadStats();
         else if (key === "settings") this.loadSettings();
       },
       onDateChange() {
         if (this.view === "today") this.loadToday();
-        else if (this.view === "diet") this.loadRecords("diet");
-        else if (this.view === "workout") this.loadRecords("workout");
-        else if (this.view === "body") {
+        else if (this.view === "records") this.loadCurrentRecordsTab();
+      },
+      // 根据当前 recordsTab 加载对应的数据
+      loadCurrentRecordsTab() {
+        const t = this.recordsTab;
+        if (t === "diet") this.loadRecords("diet");
+        else if (t === "workout") this.loadRecords("workout");
+        else if (t === "body") {
           this.loadBodyHistory();
           this.loadBodyTrend();
         }
+      },
+      // 切换记录页 sub-tab 并加载对应数据
+      setRecordsTab(tab) {
+        if (this.recordsTab === tab) return;
+        this.recordsTab = tab;
+        this.loadCurrentRecordsTab();
       },
       applyTheme() {
         const html = document.documentElement;
@@ -445,12 +455,7 @@
           this.profile = await this.api("/api/profile");
           this.goals = await this.api("/api/goals");
           if (this.view === "today") await this.loadToday();
-          if (this.view === "diet") await this.loadRecords("diet");
-          if (this.view === "workout") await this.loadRecords("workout");
-          if (this.view === "body") {
-            await this.loadBodyHistory();
-            await this.loadBodyTrend();
-          }
+          if (this.view === "records") await this.loadCurrentRecordsTab();
           if (this.view === "stats") await this.loadStats();
         } catch (e) {
           /* 静默，单条刷新失败不影响整体 */
