@@ -10,7 +10,7 @@
 - **LLM Agent**：基于 LangGraph 的对话助手，支持自然语言建档、记录、查询、删除二次确认、页面导航。未配置 LLM 时优雅降级，网页功能不受影响。
 - **目标与缺口联动**：按 BMR（Mifflin-St Jeor）→ TDEE（活动系数）→ 每日目标（目标系数）推算；当日训练消耗实时抬升有效目标，缺口口径与热量环自洽。
 - **可视化**：热量摄入环、三大宏量进度、今日概况、训练 / 饮食记录、区间统计图表（趋势折线、宏量占比、训练部位分布）。
-- **黑白极简 UI**：浅 / 深主题切换，右下角悬浮助手（浮窗不遮挡背后交互）。
+- **黑白极简 UI**：浅 / 深主题切换，底部导航（总览 / 记录 / 分析 / 设置），右下角悬浮助手（浮窗不遮挡背后交互）。
 
 ## 技术栈
 
@@ -41,13 +41,20 @@ python run.py
 
 手机端使用独立安装的 App（数据存手机本地），不再提供网页版部署。
 
-- **现成安装包**：`apk/fitness-recorder-v1.0-debug.apk`（约 3.9MB，debug 签名，可直接安装；正式分发建议用 release 签名版，见下）
+- **现成安装包**：`apk/fitness-recorder-v1.0-debug.apk`（约 3.9MB，debug 签名，可直接安装）
+- **正式分发**：`apk/fitness-recorder-v1.0-release.apk`（用 `fitness-recorder-release.jks` 签名，可覆盖升级）。签名密钥库不入库，需自行生成（见下「重新构建」）
 - **安装**：把 APK 传到手机 → 点击安装 → 首次需允许「安装未知来源应用」
 - **数据存储**：全部存手机本地（IndexedDB），可离线使用
 - **AI 对话**：在「设置」页填 OpenAI 兼容接口的 API Key（如 SiliconFlow），key 只存本机
-- **备份 / 迁移 / 分享**：设置页「导出全部 JSON」→ 发给别人导入即用同一套数据；重复导入按记录 id 自动去重（并集合并）
+- **备份 / 迁移 / 分享**：设置页「导出全部 JSON」→ 发给别人导入即用同一套数据；重复导入按「记录类型 + 原 id」自动去重（并集合并），不会越导越多
 - **技术说明**：`pwa/` 是纯前端 web 资源（Vue 3 + IndexedDB，零构建），`mobile/` 是 Capacitor 6 工程，把 `pwa/` 打包成原生 Android WebView 壳
 - **重新构建**：改完 `pwa/` 后，`mobile/` 目录内 `cap sync` 同步资源再打包（Windows 上有中文路径/沙箱等坑，完整步骤见技能 `capacitor-apk-build`）
+- **Release 签名**：首次打包 release 需先生成密钥库（不入库，自行保管）：
+  ```bash
+  keytool -genkeypair -v -keystore mobile/android/app/fitness-recorder-release.jks \
+    -alias fitness-recorder -keyalg RSA -keysize 2048 -validity 10000
+  ```
+  密码优先读 `~/.gradle/gradle.properties` 的 `FITNESS_RECORDER_RELEASE_STORE_PASSWORD` / `_KEY_PASSWORD`，也可写环境变量；构建用 `gradle assembleRelease`，debug/release 统一用同一 keystore 签名（保证可覆盖升级）
 - 本地预览 web 资源：`python -m http.server 8001 --directory pwa` 后访问 `http://127.0.0.1:8001`
 
 桌面 FastAPI 版（AI 能力更强）与手机 App 版并存，两边用 JSON 导出/导入互相同步。
