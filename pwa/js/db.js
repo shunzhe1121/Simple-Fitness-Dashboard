@@ -414,8 +414,21 @@
     if (!data || typeof data !== "object") throw new Error("导入数据格式不正确");
     var db = await openDB();
 
+    // 兼容两种导入格式：
+    // 1) PWA 原生格式：{ records: [{type, ...}] }
+    // 2) 桌面 FastAPI 版导出格式：{ diet: [...], workout: [...], body: [...] }（分组数组）
+    var records;
+    if (Array.isArray(data.records)) {
+      records = data.records;
+    } else {
+      records = [];
+      ["diet", "workout", "body"].forEach(function (t) {
+        (Array.isArray(data[t]) ? data[t] : []).forEach(function (r) {
+          records.push(Object.assign({ type: t }, r));
+        });
+      });
+    }
     // 校验记录类型
-    var records = Array.isArray(data.records) ? data.records : [];
     records.forEach(function (r) {
       if (!RECORD_TYPES[r.type]) throw new Error("导入数据包含未知记录类型：" + r.type);
     });
