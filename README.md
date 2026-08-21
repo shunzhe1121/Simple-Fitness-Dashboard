@@ -16,7 +16,7 @@
 
 - 后端：FastAPI + SQLite + LangGraph（OpenAI 兼容接口，默认 DeepSeek-V3）
 - 前端：Vue 3 + Chart.js（本地 vendor，离线可用，CDN 兜底）
-- 架构：API-first，网页仅作客户端；原生 App 可直接复用 `/api`
+- 架构：API-first，网页仅作客户端；手机 App 是纯前端壳（数据存本机），与桌面版通过 JSON 导出/导入同步
 
 ## 快速开始
 
@@ -37,25 +37,20 @@ python run.py
 
 服务监听 `0.0.0.0:8000`。本机访问 `http://127.0.0.1:8000`；同 WiFi 下手机用局域网 IP 访问。
 
-## 手机版（PWA，无需服务器）
+## 手机版（Android APK）
 
-`pwa/` 是纯前端本地版：**数据全部存在手机本地**（IndexedDB），不需要任何后端服务，可离线使用。
-
-- **使用**：手机浏览器打开 `https://shunzhe1121.github.io/Simple-Fitness-Dashboard/` → 菜单「添加到主屏幕」→ 像 App 一样全屏使用
-- **AI 对话**：在「设置」页填 OpenAI 兼容接口的 API Key（如 SiliconFlow），key 只存本机
-- **备份 / 迁移 / 分享**：设置页「导出全部 JSON」得到备份文件，发给别人导入即用同一套数据——无需注册、无需登录、无需服务器
-- **离线**：Service Worker 缓存全部资源，断网也能用（AI 对话除外）
-- 本地预览：`python -m http.server 8001 --directory pwa` 后访问 `http://127.0.0.1:8001`
-
-桌面 FastAPI 版（AI 能力更强）与手机 PWA 版并存，两边用 JSON 导出/导入互相同步。
-
-## Android APK（独立安装包）
-
-`mobile/` 是 Capacitor 6 工程，把 `pwa/` 打包成原生 Android APK（WebView 壳），数据同样存手机本地。
+手机端使用独立安装的 App（数据存手机本地），不再提供网页版部署。
 
 - **现成安装包**：`apk/健身记录助手-v1.0-debug.apk`（约 3.9MB，debug 签名，可直接安装）
 - **安装**：把 APK 传到手机 → 点击安装 → 首次需允许「安装未知来源应用」
+- **数据存储**：全部存手机本地（IndexedDB），可离线使用
+- **AI 对话**：在「设置」页填 OpenAI 兼容接口的 API Key（如 SiliconFlow），key 只存本机
+- **备份 / 迁移 / 分享**：设置页「导出全部 JSON」→ 发给别人导入即用同一套数据；重复导入按记录 id 自动去重（并集合并）
+- **技术说明**：`pwa/` 是纯前端 web 资源（Vue 3 + IndexedDB，零构建），`mobile/` 是 Capacitor 6 工程，把 `pwa/` 打包成原生 Android WebView 壳
 - **重新构建**：改完 `pwa/` 后，`mobile/` 目录内 `cap sync` 同步资源再打包（Windows 上有中文路径/沙箱等坑，完整步骤见技能 `capacitor-apk-build`）
+- 本地预览 web 资源：`python -m http.server 8001 --directory pwa` 后访问 `http://127.0.0.1:8001`
+
+桌面 FastAPI 版（AI 能力更强）与手机 App 版并存，两边用 JSON 导出/导入互相同步。
 
 ## 项目结构
 
@@ -72,16 +67,16 @@ static/
   js/app.js         SPA 逻辑
   css/style.css
   vendor/           Vue + Chart.js 本地副本
-pwa/                 手机版（纯前端本地存储，无后端）
-  index.html         入口
+pwa/                手机 App 的 web 资源源（纯前端，数据存 IndexedDB，零构建）
+  index.html         入口（App 首屏即此页）
   js/                utils / nutrition / parser / db(IndexedDB) / agent / localapi / app
-  manifest.json      PWA 清单（主屏幕图标、全屏）
-  sw.js              Service Worker（离线缓存）
+  manifest.json      PWA 清单（APK 壳内使用）
+  sw.js              Service Worker（离线缓存，网页部署时生效）
   icon-*.png         应用图标
 mobile/              Android APK 打包工程（Capacitor 6）
   capacitor.config.json  应用 ID / 名称 / webDir 指向 ../pwa
   android/           原生 Android 工程（Gradle）
   init-mirror.gradle 阿里云镜像加速脚本
-apk/                 构建产物（APK 安装包）
+apk/                 构建产物（APK 安装包，如 健身记录助手-v1.0-debug.apk）
 run.py              入口
 ```
