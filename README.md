@@ -37,6 +37,18 @@ python run.py
 
 服务监听 `0.0.0.0:8000`。本机访问 `http://127.0.0.1:8000`；同 WiFi 下手机用局域网 IP 访问。
 
+## 手机版（PWA，无需服务器）
+
+`pwa/` 是纯前端本地版：**数据全部存在手机本地**（IndexedDB），不需要任何后端服务，可离线使用。
+
+- **使用**：手机浏览器打开 `https://shunzhe1121.github.io/Simple-Fitness-Dashboard/` → 菜单「添加到主屏幕」→ 像 App 一样全屏使用
+- **AI 对话**：在「设置」页填 OpenAI 兼容接口的 API Key（如 SiliconFlow），key 只存本机
+- **备份 / 迁移 / 分享**：设置页「导出全部 JSON」得到备份文件，发给别人导入即用同一套数据——无需注册、无需登录、无需服务器
+- **离线**：Service Worker 缓存全部资源，断网也能用（AI 对话除外）
+- 本地预览：`python -m http.server 8001 --directory pwa` 后访问 `http://127.0.0.1:8001`
+
+桌面 FastAPI 版（AI 能力更强）与手机 PWA 版并存，两边用 JSON 导出/导入互相同步。
+
 ## 项目结构
 
 ```
@@ -52,5 +64,11 @@ static/
   js/app.js         SPA 逻辑
   css/style.css
   vendor/           Vue + Chart.js 本地副本
+pwa/                 手机版（纯前端本地存储，无后端）
+  index.html         入口
+  js/                utils / nutrition / parser / db(IndexedDB) / agent / localapi / app
+  manifest.json      PWA 清单（主屏幕图标、全屏）
+  sw.js              Service Worker（离线缓存）
+  icon-*.png         应用图标
 run.py              入口
 ```
