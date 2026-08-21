@@ -25,8 +25,11 @@
         <span v-else-if="theme === 'light'">☀️</span>
         <span v-else>🌙</span>
       </button>
-      <input type="date" v-model="selectedDate" @change="onDateChange" class="date-input"
-             v-if="['today','records'].includes(view)">
+      <div class="date-nav" v-if="['today','records'].includes(view)">
+        <button class="date-arrow" @click="shiftDate(-1)" aria-label="前一天" title="前一天">‹</button>
+        <input type="date" v-model="selectedDate" @change="onDateChange" class="date-input">
+        <button class="date-arrow" @click="shiftDate(1)" aria-label="后一天" title="后一天">›</button>
+      </div>
     </div>
   </header>
 

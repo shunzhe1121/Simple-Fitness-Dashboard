@@ -412,6 +412,17 @@
         if (this.view === "today") this.loadToday();
         else if (this.view === "records") this.loadCurrentRecordsTab();
       },
+      // 日期左右箭头：按天前后切换选中日期，并刷新当前页数据
+      shiftDate(delta) {
+        const d = new Date(this.selectedDate + "T00:00:00");
+        if (isNaN(d.getTime())) return;
+        d.setDate(d.getDate() + delta);
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, "0");
+        const day = String(d.getDate()).padStart(2, "0");
+        this.selectedDate = y + "-" + m + "-" + day;
+        this.onDateChange();
+      },
       // 根据当前 recordsTab 加载对应的数据
       loadCurrentRecordsTab() {
         const t = this.recordsTab;
@@ -589,6 +600,7 @@
           if (type === "diet") {
             const f = this.dietForm;
             const payload = {
+              date: this.selectedDate,
               meal_type: f.meal_type,
               food_name: f.food_name,
               amount: f.amount || null,
@@ -603,6 +615,7 @@
           } else if (type === "workout") {
             const f = this.workoutForm;
             const payload = {
+              date: this.selectedDate,
               category: f.category,
               duration_min: this.num(f.duration_min),
               calories: this.num(f.calories),
@@ -613,7 +626,7 @@
             this.notify({ text: "已添加训练", tone: "ok" });
           } else if (type === "body") {
             const f = this.bodyForm;
-            const payload = { weight: this.num(f.weight), body_fat: this.num(f.body_fat), waist: this.num(f.waist) };
+            const payload = { date: this.selectedDate, weight: this.num(f.weight), body_fat: this.num(f.body_fat), waist: this.num(f.waist) };
             await this.api("/api/records/body", payload, "POST");
             this.bodyForm = { weight: "", body_fat: "", waist: "" };
             this.notify({ text: "已记录身体数据", tone: "ok" });

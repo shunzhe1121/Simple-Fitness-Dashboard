@@ -202,8 +202,27 @@ button, input, select, textarea {
 .topbar h1 { margin: 0; font-size: 16px; font-weight: 500; white-space: nowrap; flex-shrink: 0; }
 .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 
+.date-nav { display: flex; align-items: center; gap: 4px; }
+.date-arrow {
+  width: 28px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text-2);
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  padding: 0;
+  transition: background .12s;
+}
+.date-arrow:hover { background: var(--surface-3); color: var(--text); }
+
 .date-input {
-  padding: 6px 10px;
+  padding: 6px 8px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface-2);
