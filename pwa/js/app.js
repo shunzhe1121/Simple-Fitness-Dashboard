@@ -291,9 +291,6 @@
       window.removeEventListener("pageshow", this.onPageShow);
       document.removeEventListener("visibilitychange", this.onVisibilityChange);
     },
-    watch: {
-      theme() { this.applyTheme(); },
-    },
 
     methods: {
       onKeyDown(e) {
@@ -774,8 +771,12 @@
           const text = await file.text();
           const data = JSON.parse(text);
           const res = await this.api("/api/import", { data: data, replace: false }, "POST");
-          const n = (res && res.count) || 0;
-          this.notify({ text: n ? "已导入 " + n + " 条记录，回到今日总览" : "导入完成", tone: "ok" });
+          const added = (res && res.added) || 0;
+          const skipped = Math.max(((res && res.count) || 0) - added, 0);
+          let msg = "导入完成";
+          if (added > 0) msg = "已导入 " + added + " 条";
+          if (skipped > 0) msg += added > 0 ? "，跳过重复 " + skipped + " 条" : "，没有新记录（" + skipped + " 条已存在）";
+          this.notify({ text: msg + "，回到今日总览", tone: "ok" });
           await this.refreshData();
           // 导入完成后切到今日总览，让用户立刻看到效果（避免停留在 settings 页以为没刷新）
           this.go("today");
@@ -1135,6 +1136,9 @@
       },
     },
     watch: {
+      // 注意：这里只有一个 watch 对象。若再写一个 watch: {...} 会把本对象整体覆盖，
+      // 导致 theme 变化时 applyTheme 永远不会被调用（曾因此主题切换无效）。
+      theme() { this.applyTheme(); },
       chatMessages() {
         this.$nextTick(() => this.scrollChat());
       },

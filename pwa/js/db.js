@@ -442,6 +442,7 @@
 
     // 写入记录（归一化 + 保留原 id 与 deletedAt）
     var store = tx(db, "records", "readwrite");
+    var added = 0;
     for (var j = 0; j < records.length; j++) {
       var raw = records[j];
       var cleaned = normalizeRecord(raw.type, raw);
@@ -451,18 +452,19 @@
       if (raw.id !== undefined && raw.id !== null) {
         cleaned.id = raw.id;
         if (!replace) {
-          // 追加模式：若 id 已存在则让给自增（避免覆盖现有记录）
+          // 并集语义：id 已存在则跳过该条，避免重复导入同一备份产生重复记录
           var exists = await get(store, raw.id);
-          if (exists) delete cleaned.id;
+          if (exists) continue;
         }
       }
       await put(store, cleaned);
+      added++;
     }
 
     if (data.profile) await kvSet("profile", data.profile);
     if (data.goals) await kvSet("goals", data.goals);
     if (data.settings) await kvSet("settings", data.settings);
-    return { count: records.length };
+    return { count: records.length, added: added };
   }
 
   // ---------------------------------------------------------------- 设置（LLM key 等）
