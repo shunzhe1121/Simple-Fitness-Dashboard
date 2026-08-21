@@ -321,6 +321,8 @@ button, input, select, textarea {
   color: #fff;
   padding: 2px 9px;
   border-radius: 999px;
+  white-space: nowrap;       /* 移动端宽度吃紧时不允许「急速减脂」等长标签内部换行 */
+  flex-shrink: 0;
 }
 .info-btn {
   width: 20px;
@@ -559,6 +561,25 @@ button, input, select, textarea {
 .row-actions .ok-btn:hover { opacity: .88; }
 .row-actions .ok-btn:disabled { opacity: .45; cursor: not-allowed; }
 .row-actions .ghost-btn { padding: 4px 10px; font-size: 12px; }
+
+/* ---------------- 顶部主题按钮（icon 风格，移动端常驻） ---------------- */
+
+.theme-btn {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  padding: 0;
+  transition: background .12s;
+}
+.theme-btn:hover { background: var(--surface-3); }
 
 .mini-input {
   width: 100%;
@@ -881,4 +902,22 @@ code {
   .kpi-grid { grid-template-columns: 1fr 1fr; }
   .chart-wrap, .chart-card.is-short .chart-wrap { height: 200px; }
   .ring-wrap { width: 148px; }
+  /* 窄屏表格：row-actions 改纵向紧凑布局，避免「编辑/删除」撑爆表格宽度 */
+  .table .row-actions {
+    white-space: normal;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
+    width: 56px;
+  }
+  .table .row-actions .edit-btn,
+  .table .row-actions .del-btn,
+  .table .row-actions .ok-btn,
+  .table .row-actions .ghost-btn {
+    margin: 0;
+    padding: 3px 6px;
+    font-size: 11px;
+    text-align: center;
+  }
 }

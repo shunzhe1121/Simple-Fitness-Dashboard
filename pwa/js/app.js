@@ -773,9 +773,12 @@
         try {
           const text = await file.text();
           const data = JSON.parse(text);
-          await this.api("/api/import", { data: data, replace: false }, "POST");
-          this.notify({ text: "导入完成", tone: "ok" });
+          const res = await this.api("/api/import", { data: data, replace: false }, "POST");
+          const n = (res && res.count) || 0;
+          this.notify({ text: n ? "已导入 " + n + " 条记录，回到今日总览" : "导入完成", tone: "ok" });
           await this.refreshData();
+          // 导入完成后切到今日总览，让用户立刻看到效果（避免停留在 settings 页以为没刷新）
+          this.go("today");
         } catch (e) {
           this.notify({ text: "导入失败：" + e.message, tone: "error" });
         } finally {

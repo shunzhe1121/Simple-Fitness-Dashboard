@@ -36,7 +36,6 @@
       <div class="llm-chip" :class="llmReady ? 'on' : 'off'">
         {{ llmReady ? 'LLM 已接入' : 'LLM 未配置' }}
       </div>
-      <button class="ghost-btn" @click="cycleTheme">外观：{{ themeLabel }}</button>
     </div>
   </aside>
 
@@ -46,6 +45,11 @@
       <button class="icon-btn only-mobile" @click="navOpen = true">导航</button>
       <h1>{{ currentNav.label }}</h1>
       <div class="topbar-right">
+        <button class="theme-btn" @click="cycleTheme" :title="'外观：' + themeLabel" :aria-label="'切换外观，当前：' + themeLabel">
+          <span v-if="theme === 'auto'">🌓</span>
+          <span v-else-if="theme === 'light'">☀️</span>
+          <span v-else>🌙</span>
+        </button>
         <input type="date" v-model="selectedDate" @change="onDateChange" class="date-input"
                v-if="['today','diet','workout','body'].includes(view)">
       </div>
