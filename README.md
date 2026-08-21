@@ -1,5 +1,7 @@
 # Simple Fitness Dashboard
 
+![界面截图](assets/screenshot.png)
+
 本地优先的健身记录助手：记录饮食 / 训练 / 身体数据，由 LLM Agent 驱动自然语言交互，配套 Vue 单页前端做可视化总览与统计分析。
 
 ## 功能
@@ -12,7 +14,7 @@
 
 ## 技术栈
 
-- 后端：FastAPI + SQLite + LangGraph（`deepseek-ai/DeepSeek-V3`，经 SiliconFlow 接入）
+- 后端：FastAPI + SQLite + LangGraph（OpenAI 兼容接口，默认 DeepSeek-V3）
 - 前端：Vue 3 + Chart.js（本地 vendor，离线可用，CDN 兜底）
 - 架构：API-first，网页仅作客户端；原生 App 可直接复用 `/api`
 
@@ -24,9 +26,9 @@ pip install -r requirements.txt
 
 # 2. 配置 LLM（可选，不填则 Agent 不可用但网页正常）
 cp .env.example .env
-# 编辑 .env，填入硅基流动 key：
+# 编辑 .env，填入 OpenAI 兼容接口的密钥：
 #   LLM_API_KEY=sk-xxx
-#   LLM_BASE_URL=https://api.siliconflow.cn/v1
+#   LLM_BASE_URL=https://api.siliconflow.cn/v1   # 任意 OpenAI 兼容服务均可（SiliconFlow、DeepSeek 官方、本地 vLLM 等）
 #   LLM_MODEL=deepseek-ai/DeepSeek-V3
 
 # 3. 启动
@@ -52,8 +54,3 @@ static/
   vendor/           Vue + Chart.js 本地副本
 run.py              入口
 ```
-
-## 数据说明
-
-- `.env`（含 API key）与 `data/`（SQLite 含真实健康数据）已加入 `.gitignore`，**不会上传**。
-- 仅仓库内置 `.env.example` 模板，不含任何密钥。
