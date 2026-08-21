@@ -41,7 +41,7 @@ python run.py
 
 手机端使用独立安装的 App（数据存手机本地），不再提供网页版部署。
 
-- **现成安装包**：`apk/健身记录助手-v1.0-debug.apk`（约 3.9MB，debug 签名，可直接安装）
+- **现成安装包**：`apk/fitness-recorder-v1.0-debug.apk`（约 3.9MB，debug 签名，可直接安装；正式分发建议用 release 签名版，见下）
 - **安装**：把 APK 传到手机 → 点击安装 → 首次需允许「安装未知来源应用」
 - **数据存储**：全部存手机本地（IndexedDB），可离线使用
 - **AI 对话**：在「设置」页填 OpenAI 兼容接口的 API Key（如 SiliconFlow），key 只存本机
@@ -77,6 +77,6 @@ mobile/              Android APK 打包工程（Capacitor 6）
   capacitor.config.json  应用 ID / 名称 / webDir 指向 ../pwa
   android/           原生 Android 工程（Gradle）
   init-mirror.gradle 阿里云镜像加速脚本
-apk/                 构建产物（APK 安装包，如 健身记录助手-v1.0-debug.apk）
+apk/                 构建产物（APK 安装包，如 fitness-recorder-v1.0-debug.apk / fitness-recorder-v1.0-release.apk）
 run.py              入口
 ```
