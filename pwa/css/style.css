@@ -7,7 +7,7 @@
   --surface: #ffffff;
   --surface-2: #f2f2f2;
   --surface-3: #e8e8e8;
-  --border: #e0e0e0;
+  --border: #e5e5e5;
   --text: #0a0a0a;
   --text-2: #595959;
   --text-3: #999999;
@@ -21,23 +21,24 @@
   --c3: #e08c26;
   --c4: #8b5cf0;
   --c5: #d4453f;
-  --radius: 12px;
-  --radius-sm: 8px;
-  --shadow: 0 1px 2px rgba(0,0,0,.06);
+  --radius: 16px;
+  --radius-sm: 12px;
+  --radius-pill: 999px;
+  --shadow: 0 1px 3px rgba(0,0,0,.04);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0a0a0a;
-    --surface: #141414;
-    --surface-2: #1a1a1a;
-    --surface-3: #242424;
-    --border: #2a2a2a;
+    --bg: #050505;
+    --surface: #111111;
+    --surface-2: #161616;
+    --surface-3: #1f1f1f;
+    --border: #222222;
     --text: #f5f5f5;
     --text-2: #a3a3a3;
     --text-3: #737373;
     --accent: #ffffff;
-    --accent-soft: #1a1a1a;
+    --accent-soft: #161616;
     --ok: #3fbd97;
     --warn: #e0a34a;
     --danger: #ef6b64;
@@ -55,7 +56,7 @@
   --surface: #ffffff;
   --surface-2: #f2f2f2;
   --surface-3: #e8e8e8;
-  --border: #e0e0e0;
+  --border: #e5e5e5;
   --text: #0a0a0a;
   --text-2: #595959;
   --text-3: #999999;
@@ -69,20 +70,20 @@
   --c3: #e08c26;
   --c4: #8b5cf0;
   --c5: #d4453f;
-  --shadow: 0 1px 2px rgba(0,0,0,.06);
+  --shadow: 0 1px 3px rgba(0,0,0,.04);
 }
 
 [data-theme="dark"] {
-  --bg: #0a0a0a;
-  --surface: #141414;
-  --surface-2: #1a1a1a;
-  --surface-3: #242424;
-  --border: #2a2a2a;
+  --bg: #050505;
+  --surface: #111111;
+  --surface-2: #161616;
+  --surface-3: #1f1f1f;
+  --border: #222222;
   --text: #f5f5f5;
   --text-2: #a3a3a3;
   --text-3: #737373;
   --accent: #ffffff;
-  --accent-soft: #1a1a1a;
+  --accent-soft: #161616;
   --ok: #3fbd97;
   --warn: #e0a34a;
   --danger: #ef6b64;
@@ -210,8 +211,8 @@ button, input, select, textarea {
   background: var(--surface-2);
 }
 
-.scroll { flex: 1; overflow-y: auto; padding: 20px 22px 40px; }
-.page { display: flex; flex-direction: column; gap: 16px; max-width: 100%; }
+.scroll { flex: 1; overflow-y: auto; padding: 24px 26px 48px; }
+.page { display: flex; flex-direction: column; gap: 18px; max-width: 100%; }
 
 /* ---------------- 卡片与网格 ---------------- */
 
@@ -219,7 +220,7 @@ button, input, select, textarea {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 16px 18px;
+  padding: 20px 22px;
   box-shadow: var(--shadow);
   display: flex;
   flex-direction: column;
@@ -231,9 +232,9 @@ button, input, select, textarea {
   align-items: center;
   gap: 8px;
   font-weight: 600;
-  font-size: 14px;
+  font-size: 15px;
   letter-spacing: 0.2px;
-  margin-bottom: 14px;
+  margin-bottom: 16px;
   color: var(--text);
 }
 
@@ -503,16 +504,17 @@ button, input, select, textarea {
 .btn-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 
 .primary-btn, .ghost-btn, .danger-btn, .icon-btn, .file-btn {
-  padding: 8px 14px;
-  border-radius: var(--radius-sm);
+  padding: 8px 16px;
+  border-radius: var(--radius-pill);   /* 主操作按钮胶囊形 */
   border: 1px solid transparent;
   cursor: pointer;
-  transition: background .12s, color .12s, transform .1s;
+  transition: background .15s, color .15s, transform .1s;
 }
+.icon-btn { border-radius: var(--radius-sm); }   /* 图标/导航按钮保持小圆角 */
 .primary-btn {
   background: var(--accent);
   color: var(--surface);
-  padding: 10px 20px;           /* 加大内边距，深色下白底更醒目 */
+  padding: 10px 22px;           /* 加大内边距，深色下白底更醒目 */
   font-weight: 600;
   font-size: 14px;
 }
