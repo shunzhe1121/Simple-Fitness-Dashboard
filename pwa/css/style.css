@@ -197,10 +197,11 @@ button, input, select, textarea {
   padding: 14px 22px;
   border-bottom: 1px solid var(--border);
   background: var(--surface);
+  flex-wrap: nowrap;             /* 顶部栏元素横向排列，标题不允许换行（避免 4 元素挤一行时标题折成两行） */
 }
 
-.topbar h1 { margin: 0; font-size: 16px; font-weight: 500; }
-.topbar-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.topbar h1 { margin: 0; font-size: 16px; font-weight: 500; white-space: nowrap; flex-shrink: 0; }
+.topbar-right { margin-left: auto; display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 
 .date-input {
   padding: 6px 10px;
@@ -506,14 +507,32 @@ button, input, select, textarea {
   border-radius: var(--radius-sm);
   border: 1px solid transparent;
   cursor: pointer;
-  transition: opacity .12s, background .12s;
+  transition: background .12s, color .12s, transform .1s;
 }
-.primary-btn { background: var(--accent); color: var(--surface); }
+.primary-btn {
+  background: var(--accent);
+  color: var(--surface);
+  padding: 10px 20px;           /* 加大内边距，深色下白底更醒目 */
+  font-weight: 600;
+  font-size: 14px;
+}
 .ghost-btn, .icon-btn, .file-btn { background: var(--surface-2); border-color: var(--border); color: var(--text-2); }
 .danger-btn { background: var(--danger); color: #fff; }
-.primary-btn:hover, .danger-btn:hover { opacity: .88; }
+/* hover 用亮度变化，避免 opacity 让 active 状态看起来「灰」 */
+.primary-btn:hover { filter: brightness(0.92); }
+.primary-btn:active { transform: scale(0.97); }
 .ghost-btn:hover, .icon-btn:hover, .file-btn:hover { background: var(--surface-3); color: var(--text); }
-.primary-btn:disabled, .ghost-btn:disabled { opacity: .45; cursor: not-allowed; }
+.danger-btn:hover { filter: brightness(0.92); }
+/* disabled 用色阶变化而非透明度，避免白色按钮变浅灰 */
+.primary-btn:disabled, .ghost-btn:disabled {
+  background: var(--surface-2);
+  color: var(--text-3);
+  border-color: var(--border);
+  cursor: not-allowed;
+  transform: none;
+  filter: none;
+}
+.primary-btn:disabled { color: var(--text-3); }
 .file-btn { display: inline-block; }
 
 .link-btn {

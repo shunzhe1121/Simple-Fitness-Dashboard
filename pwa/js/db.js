@@ -452,9 +452,10 @@
       if (raw.id !== undefined && raw.id !== null) {
         cleaned.id = raw.id;
         if (!replace) {
-          // 并集语义：id 已存在则跳过该条，避免重复导入同一备份产生重复记录
+          // 并集语义：未删除的同 id 记录跳过（重复导入同一备份不会产生重复记录）；
+          // 但软删除（deletedAt）的记录视为不存在，重新写入相当于「恢复」。
           var exists = await get(store, raw.id);
-          if (exists) continue;
+          if (exists && !exists.deletedAt) continue;
         }
       }
       await put(store, cleaned);
