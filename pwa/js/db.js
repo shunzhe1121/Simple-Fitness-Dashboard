@@ -365,6 +365,13 @@
     var avgCalories = average(series.diet_calories, true);
     var targetCalories = goals.daily_calories;
 
+    // 宏量热量占比（蛋白 4 / 脂肪 9 / 碳水 4 kcal 每克），统计页环形图用
+    var macroShare = {
+      protein_share: Math.round(dietRows.reduce(function (a, r) { return a + (r.protein || 0); }, 0) * 4 * 10) / 10,
+      fat_share: Math.round(dietRows.reduce(function (a, r) { return a + (r.fat || 0); }, 0) * 9 * 10) / 10,
+      carbs_share: Math.round(dietRows.reduce(function (a, r) { return a + (r.carbs || 0); }, 0) * 4 * 10) / 10,
+    };
+
     return {
       date_from: start,
       date_to: end,
@@ -386,6 +393,7 @@
         diet_records: dietRows.length,
       },
       category_minutes: categoryMinutes,
+      macro_share: macroShare,
       goal_gap: (avgCalories !== null && targetCalories) ? Math.round((avgCalories - targetCalories) * 10) / 10 : null,
       goals: goals,
     };

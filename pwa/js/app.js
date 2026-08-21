@@ -769,10 +769,28 @@
       async exportData() {
         try {
           const data = await FitDB.exportAll();
-          const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+          const json = JSON.stringify(data, null, 2);
+          const fileName = "fit-backup-" + this.selectedDate + ".json";
+          // 原生 App（Capacitor WebView）：写缓存文件 + 调系统分享（可存到下载/发给他人）
+          const cap = window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform() ? window.Capacitor : null;
+          if (cap && cap.Plugins && cap.Plugins.Filesystem && cap.Plugins.Share) {
+            const fs = cap.Plugins.Filesystem;
+            await fs.writeFile({ path: fileName, data: json, directory: "CACHE", recursive: true });
+            const uriRes = await fs.getUri({ path: fileName, directory: "CACHE" });
+            await cap.Plugins.Share.share({
+              title: "健身记录备份",
+              text: "导出健身记录备份文件",
+              files: [uriRes.uri],
+              dialogTitle: "导出备份",
+            });
+            this.notify({ text: "已导出，选择保存位置或分享", tone: "ok" });
+            return;
+          }
+          // 浏览器：<a download> 下载
+          const blob = new Blob([json], { type: "application/json" });
           const a = document.createElement("a");
           a.href = URL.createObjectURL(blob);
-          a.download = "fit-backup-" + this.selectedDate + ".json";
+          a.download = fileName;
           document.body.appendChild(a);
           a.click();
           document.body.removeChild(a);
