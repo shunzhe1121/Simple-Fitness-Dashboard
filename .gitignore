@@ -35,4 +35,6 @@ mobile/android/build/
 mobile/android/app/build/
 mobile/android/capacitor-cordova-android-plugins/build/
 mobile/android/app/src/main/assets/public/
-*.apk
+
+# 注意：apk/ 目录是交付产物（现成安装包），需要纳入版本管理；
+# 只排除 mobile/ 构建目录内的中间 APK（已由上面的 app/build 覆盖）。
