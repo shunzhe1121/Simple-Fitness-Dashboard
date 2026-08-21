@@ -49,6 +49,14 @@ python run.py
 
 桌面 FastAPI 版（AI 能力更强）与手机 PWA 版并存，两边用 JSON 导出/导入互相同步。
 
+## Android APK（独立安装包）
+
+`mobile/` 是 Capacitor 6 工程，把 `pwa/` 打包成原生 Android APK（WebView 壳），数据同样存手机本地。
+
+- **现成安装包**：`apk/健身记录助手-v1.0-debug.apk`（约 3.9MB，debug 签名，可直接安装）
+- **安装**：把 APK 传到手机 → 点击安装 → 首次需允许「安装未知来源应用」
+- **重新构建**：改完 `pwa/` 后，`mobile/` 目录内 `cap sync` 同步资源再打包（Windows 上有中文路径/沙箱等坑，完整步骤见技能 `capacitor-apk-build`）
+
 ## 项目结构
 
 ```
@@ -70,5 +78,10 @@ pwa/                 手机版（纯前端本地存储，无后端）
   manifest.json      PWA 清单（主屏幕图标、全屏）
   sw.js              Service Worker（离线缓存）
   icon-*.png         应用图标
+mobile/              Android APK 打包工程（Capacitor 6）
+  capacitor.config.json  应用 ID / 名称 / webDir 指向 ../pwa
+  android/           原生 Android 工程（Gradle）
+  init-mirror.gradle 阿里云镜像加速脚本
+apk/                 构建产物（APK 安装包）
 run.py              入口
 ```
