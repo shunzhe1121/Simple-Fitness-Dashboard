@@ -1,94 +1,137 @@
-# Simple Fitness Dashboard
+# Simple Fitness Recorder · 健身记录助手
 
-![预览](assets/preview.svg)
+> 本地优先的健身记录助手（中文界面）。记录饮食 / 训练 / 身体数据，自动推算每日热量目标与缺口，并提供可视化统计。支持**网页端**与 **Android App** 两种形态，数据全部存在你自己的设备上，不上传任何服务器。
 
-本地优先的健身记录助手：记录饮食 / 训练 / 身体数据，由 LLM Agent 驱动自然语言交互，配套 Vue 单页前端做可视化总览与统计分析。**支持两种形态**：桌面网页端（FastAPI 托管）与手机端（Android APK），共享同一套记录模型，用 JSON 导出 / 导入互相同步。
+[简体中文](#简体中文) · [English](#english)
 
-## 功能
+---
 
-- **数据记录**：饮食（餐次、食物、分量、热量、三大宏量）、训练（部位、时长、消耗、备注）、身体（体重、体脂、腰围）。列表支持行内编辑与软删除。
-- **LLM Agent**：基于 LangGraph 的对话助手，支持自然语言建档、记录、查询、删除二次确认、页面导航。未配置 LLM 时优雅降级，网页功能不受影响。
-- **目标与缺口联动**：按 BMR（Mifflin-St Jeor）→ TDEE（活动系数）→ 每日目标（目标系数）推算；当日训练消耗实时抬升有效目标，缺口口径与热量环自洽。
-- **可视化**：热量摄入环、三大宏量进度、今日概况、训练 / 饮食记录、区间统计图表（趋势折线、宏量占比、训练部位分布）。
-- **黑白极简 UI**：浅 / 深主题切换；网页端为侧栏布局，手机端为底部导航（总览 / 记录 / 分析 / 设置）；右下角悬浮助手（浮窗不遮挡背后交互）。
-- **跨端一致**：网页端与手机端记录结构一致，导出 JSON 在两端都能导入（按「记录类型 + 原 id」去重，不会越导越多）。
+## 简体中文
 
-## 技术栈
+### 界面预览
 
-- 后端：FastAPI + SQLite + LangGraph（OpenAI 兼容接口，默认 DeepSeek-V3）
-- 前端：Vue 3 + Chart.js（本地 vendor，离线可用，CDN 兜底）
-- 架构：API-first，网页仅作客户端；手机 App 是纯前端壳（数据存本机），与桌面版通过 JSON 导出/导入同步
+| 网页端 · 今日总览 | 手机端 · 今日总览 |
+| --- | --- |
+| ![网页端今日总览](assets/screenshots/desktop-today.png) | ![手机端今日总览](assets/screenshots/mobile-today.png) |
 
-## 快速开始（网页端）
+| 网页端 · 统计分析 | 手机端 · 统计分析 |
+| --- | --- |
+| ![网页端统计分析](assets/screenshots/desktop-stats.png) | ![手机端统计分析](assets/screenshots/mobile-stats.png) |
+
+### 功能特性
+
+- **三类记录**：饮食（餐次 / 食物 / 分量 / 热量 / 三大宏量）、训练（部位 / 时长 / 消耗 / 备注）、身体（体重 / 体脂 / 腰围），列表内支持行内编辑与软删除（删错可从回收站恢复）。
+- **目标与缺口联动**：按 BMR（Mifflin-St Jeor）→ TDEE（活动系数）→ 每日目标（目标系数）推算热量目标；当天训练消耗会实时抬高有效目标，热量环与缺口口径自洽。
+- **可视化统计**：热量摄入环、三大宏量进度条、今日概况，以及区间趋势折线、宏量热量占比、训练部位分布等图表。
+- **辅助录入**：把视觉大模型的识图结果按模板粘贴进来，本地规则直接解析入库，不消耗对话额度；也支持纯手动填写。
+- **AI 助手（可选）**：接入 OpenAI 兼容接口（如 SiliconFlow / DeepSeek）后，可用自然语言建档、记录、查询、删除（删除带二次确认）。不配置也能正常使用全部记录与统计功能。
+- **黑白极简 UI**：浅 / 深主题切换；网页端为侧栏布局，手机端为底部导航；右下角悬浮助手不遮挡背后交互。
+- **跨端一致**：网页端与手机端共用同一套记录模型，导出 JSON 在两端均可导入，按「记录类型 + 原 id」去重，重复导入不会越导越多。
+
+### 两种使用形态
+
+| | 网页端（桌面） | 手机端（Android） |
+| --- | --- | --- |
+| 数据存储 | 本机 SQLite（`data/`，不上传） | 本机 IndexedDB（离线可用） |
+| 运行方式 | 本地启动 FastAPI，浏览器访问 | 安装 APK，独立 App |
+| 适用场景 | 电脑上做记录与复盘 | 随时随地用手机记 |
+| AI 配置 | 服务端 `.env` | App 内「设置」页填写，key 仅存本机 |
+| 关系 | 两者并存、互不替代，靠 JSON 导出 / 导入互相同步 | 同上 |
+
+### 快速开始
+
+#### 网页端
 
 ```bash
-# 1. 建议先建虚拟环境，避免和系统 Python 依赖冲突
+# 1. 建议用虚拟环境，避免污染系统 Python
 python -m venv .venv
 .venv\Scripts\activate            # Windows；Mac/Linux 用 source .venv/bin/activate
 
 # 2. 安装依赖
 pip install -r requirements.txt
 
-# 3. 配置 LLM（可选，不填则 Agent 不可用但网页正常）
+# 3.（可选）配置 AI 助手，不填则对话功能暂不可用，其余功能正常
 cp .env.example .env
 # 编辑 .env，填入 OpenAI 兼容接口的密钥：
 #   LLM_API_KEY=sk-xxx
-#   LLM_BASE_URL=https://api.siliconflow.cn/v1   # 任意 OpenAI 兼容服务均可（SiliconFlow、DeepSeek 官方、本地 vLLM 等）
+#   LLM_BASE_URL=https://api.siliconflow.cn/v1   # 任意 OpenAI 兼容服务均可
 #   LLM_MODEL=deepseek-ai/DeepSeek-V3
 
 # 4. 启动
 python run.py
 ```
 
-服务监听 `0.0.0.0:8000`。本机访问 `http://127.0.0.1:8000`；同 WiFi 下手机用局域网 IP 访问。
+启动后访问 `http://127.0.0.1:8000`。若监听 `0.0.0.0`，同 WiFi 下的手机可直接用局域网地址访问，方便「拍照 → 识图 → 粘贴入库」。
 
-> 直接双击 `run.py` 通常会因系统 Python 没装依赖而报错，请务必在装好依赖的虚拟环境（或已装依赖的 Python）里用终端启动。
+> 直接双击 `run.py` 常因系统 Python 没装依赖而报错，请在已装依赖的虚拟环境（或已装依赖的 Python）里用终端启动。
 
-## 手机版（Android APK）
+#### 手机端（Android）
 
-手机端使用独立安装的 App（数据存手机本地），与网页端并存、互不替代。
+下载仓库 `apk/` 目录下的安装包安装即可：
 
-- **现成安装包**：`apk/fitness-recorder-v1.0.3-debug.apk`（约 3.9MB，debug 签名，可直接安装）
-- **正式分发**：`apk/fitness-recorder-v1.0.3-release.apk`（用 `fitness-recorder-release.jks` 签名，可覆盖升级）。签名密钥库不入库，需自行生成（见下「重新构建」）
-- **安装**：把 APK 传到手机 → 点击安装 → 首次需允许「安装未知来源应用」。换过签名后需用 `adb push` + `pm install` 安装（直接 `adb install` 会报 `Failure [-99]`）
-- **数据存储**：全部存手机本地（IndexedDB），可离线使用
-- **AI 对话**：在「设置」页填 OpenAI 兼容接口的 API Key（如 SiliconFlow），key 只存本机
-- **备份 / 迁移 / 分享**：设置页「导出全部 JSON」→ 发给别人导入即用同一套数据；重复导入按「记录类型 + 原 id」自动去重（并集合并），不会越导越多
-- **技术说明**：`pwa/` 是纯前端 web 资源（Vue 3 + IndexedDB，零构建），`mobile/` 是 Capacitor 6 工程，把 `pwa/` 打包成原生 Android WebView 壳
-- **重新构建**：改完 `pwa/` 后，`mobile/` 目录内 `cap sync` 同步资源再打包（Windows 上有中文路径/沙箱等坑，完整步骤见技能 `capacitor-apk-build`）
-- **Release 签名**：首次打包 release 需先生成密钥库（不入库，自行保管）：
-  ```bash
-  keytool -genkeypair -v -keystore mobile/android/app/fitness-recorder-release.jks \
-    -alias fitness-recorder -keyalg RSA -keysize 2048 -validity 10000
-  ```
-  密码优先读 `~/.gradle/gradle.properties` 的 `FITNESS_RECORDER_RELEASE_STORE_PASSWORD` / `_KEY_PASSWORD`，也可写环境变量；构建用 `gradle assembleRelease`，debug/release 统一用同一 keystore 签名（保证可覆盖升级）
-- 本地预览 web 资源：`python -m http.server 8001 --directory pwa` 后访问 `http://127.0.0.1:8001`
+- `fitness-recorder-v1.0.3-release.apk`：正式签名包，可覆盖升级（推荐）
+- `fitness-recorder-v1.0.3-debug.apk`：调试签名包，约 3.9MB，可直接安装试用
 
-## 项目结构
+首次安装需允许「安装未知来源应用」。数据全部存手机本地，可离线使用；在「设置」页填写 OpenAI 兼容接口的 API Key 即可启用 AI 助手（key 只存本机）。
 
+### 数据备份与迁移
+
+设置页（网页端 / 手机端）提供「导出全部 JSON」，包含档案、目标与全部记录（含回收站）。把文件发给他人，对方导入后即可用同一套数据；重复导入按 id 自动去重（并集合并），不会重复累加。
+
+### 技术栈
+
+- **后端**：FastAPI + SQLite + LangGraph（OpenAI 兼容接口，默认 DeepSeek-V3）
+- **前端**：Vue 3 + Chart.js（本地内置，离线可用，CDN 兜底）
+- **架构**：API-first —— 网页只是客户端之一；手机 App 是纯前端壳（数据存本机），与网页端通过 JSON 导出 / 导入同步
+
+### 从源码构建（可选）
+
+- 网页端：如上 `pip install -r requirements.txt && python run.py`。
+- 手机端：`pwa/` 为纯前端 web 资源（Vue 3 + IndexedDB，零构建），`mobile/` 为 Capacitor 6 工程，把 `pwa/` 打包成原生 Android WebView 壳。改完 `pwa/` 后，在 `mobile/` 内 `cap sync` 同步资源再打包；release 需自备签名密钥库（不入库）。Windows 上中文路径 / 沙箱环境有已知坑，可参考项目内的 `capacitor-apk-build` 构建说明。
+
+### 路线图
+
+- [ ] 多档案 / 多用户
+- [ ] 训练动作库与计划模板
+- [ ] 体重 / 体脂趋势预测
+- [ ] 网页端深色主题记忆优化
+
+### 许可证
+
+本项目当前未指定开源许可证。如需用于商业或分发，请先联系作者。
+
+---
+
+## English
+
+**Simple Fitness Recorder** is a local-first fitness tracker (Chinese UI). It logs diet / workout / body measurements, auto-computes your daily calorie target and deficit, and visualizes the trends. It ships in two forms — a **web app** and an **Android app** — and keeps all your data on your own device, with no server upload.
+
+### Highlights
+
+- Three record types: diet (meal / food / portion / calories / macros), workout (muscle group / duration / burn / note), and body (weight / body-fat / waist), with inline edit and soft-delete (recoverable from trash).
+- Goal & deficit chain: BMR (Mifflin-St Jeor) → TDEE (activity factor) → daily target (goal factor); today's workout burn raises the effective target live.
+- Visual stats: calorie ring, macro progress bars, daily summary, plus range trend lines, macro split, and workout distribution charts.
+- Assisted entry: paste vision-model OCR output in a template and parse locally (no LLM cost), or enter manually.
+- Optional AI assistant: connect any OpenAI-compatible endpoint (e.g. SiliconFlow / DeepSeek) for natural-language logging and queries; everything works without it.
+- Cross-platform: web and mobile share the same record model; export JSON and re-import on either side, de-duplicated by record type + id.
+
+### Run the web app
+
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env        # optional: add an OpenAI-compatible LLM key
+python run.py               # open http://127.0.0.1:8000
 ```
-app/
-  api.py            FastAPI 路由层
-  repository.py     数据层（SQLite 读写、汇总计算）
-  nutrition.py      营养/目标/缺口计算
-  parser.py         识图文本解析（提取宏量）
-  agent/            LangGraph Agent（graph.py + tools.py）
-  db.py config.py utils.py
-static/
-  index.html        Vue 3 SPA（网页端界面）
-  js/app.js         SPA 逻辑
-  css/style.css
-  vendor/           Vue + Chart.js 本地副本
-pwa/                手机 App 的 web 资源源（纯前端，数据存 IndexedDB，零构建）
-  index.html         入口（App 首屏即此页）
-  js/                utils / nutrition / parser / db(IndexedDB) / agent / localapi / app
-  manifest.json      PWA 清单（APK 壳内使用）
-  sw.js              Service Worker（离线缓存，网页部署时生效）
-  icon-*.png         应用图标
-mobile/              Android APK 打包工程（Capacitor 6）
-  capacitor.config.json  应用 ID / 名称 / webDir 指向 ../pwa
-  android/           原生 Android 工程（Gradle）
-  init-mirror.gradle 阿里云镜像加速脚本
-apk/                构建产物（APK 安装包，如 fitness-recorder-v1.0.3-debug.apk / fitness-recorder-v1.0.3-release.apk）
-run.py              网页端入口
-```
+
+### Android
+
+Install the APK from the `apk/` directory (`fitness-recorder-v1.0.3-release.apk`). Data lives in on-device IndexedDB; configure the LLM key in the in-app Settings page if desired.
+
+### Tech stack
+
+FastAPI + SQLite + LangGraph backend; Vue 3 + Chart.js frontend; Capacitor 6 wrapping the PWA for Android. API-first design — the web UI is just one client.
+
+### License
+
+No license specified yet. Contact the author before redistribution.
