@@ -45,6 +45,8 @@ Install an APK from the `apk/` directory:
 - `apk/fitness-recorder-v1.0.3-release.apk` — production-signed, supports in-place upgrade
 - `apk/fitness-recorder-v1.0.3-debug.apk` — debug-signed, ~3.9 MB, quick trial
 
+Latest release with both APKs: [GitHub Releases](https://github.com/shunzhe1121/Simple-Fitness-Dashboard/releases/tag/v1.0.3).
+
 Allow "install from unknown sources" on first install.
 
 ## Usage
