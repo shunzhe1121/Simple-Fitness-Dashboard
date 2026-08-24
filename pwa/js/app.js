@@ -775,7 +775,11 @@
           const cap = window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform() ? window.Capacitor : null;
           if (cap && cap.Plugins && cap.Plugins.Filesystem && cap.Plugins.Share) {
             const fs = cap.Plugins.Filesystem;
-            await fs.writeFile({ path: fileName, data: json, directory: "CACHE", recursive: true });
+            // encoding 必须显式传 utf8：Capacitor 6 默认是 base64，不传会把 JSON 字符串当 base64 解码，
+            // 遇到 { } " 等非 base64 字符会产生未定义行为（不同 Android 版本表现不一致：
+            // 较新抛 "not valid base64 content"，较老吃掉非法字符留随机字节），导致写出的文件是垃圾，
+            // 再读取时 JSON.parse 报 "Unexpected token ..."。
+            await fs.writeFile({ path: fileName, data: json, directory: "CACHE", recursive: true, encoding: "utf8" });
             const uriRes = await fs.getUri({ path: fileName, directory: "CACHE" });
             await cap.Plugins.Share.share({
               title: "健身记录备份",
