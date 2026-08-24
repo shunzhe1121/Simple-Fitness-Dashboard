@@ -1002,22 +1002,21 @@ code {
   .kpi-grid { grid-template-columns: 1fr 1fr; }
   .chart-wrap, .chart-card.is-short .chart-wrap { height: 200px; }
   .ring-wrap { width: 148px; }
-  /* 窄屏表格：row-actions 改纵向紧凑布局，避免「编辑/删除」撑爆表格宽度 */
+  /* 窄屏表格：行内按钮保持水平排列，字号略缩；过挤时整张表走 .card 的 overflow-x:auto 横向滚动，
+     不再强制竖排把行高撑开（之前列向布局导致「编辑/删除」上下堆，跟其他列数字不齐）。 */
   .table .row-actions {
-    white-space: normal;
-    display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 2px;
-    width: 56px;
+    white-space: nowrap;
+    width: 1%;
   }
   .table .row-actions .edit-btn,
-  .table .row-actions .del-btn,
+  .table .row-actions .del-btn {
+    font-size: 11.5px;
+    padding: 2px 0;
+  }
   .table .row-actions .ok-btn,
   .table .row-actions .ghost-btn {
-    margin: 0;
-    padding: 3px 6px;
-    font-size: 11px;
-    text-align: center;
+    padding: 3px 8px;
+    font-size: 11.5px;
+    margin-right: 4px;
   }
 }
