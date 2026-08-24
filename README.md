@@ -98,7 +98,7 @@ repo/
 
 ## License
 
-No license file yet. Contact the author before reuse.
+MIT — see the [LICENSE](LICENSE) file.
 
 ## Contact
 
