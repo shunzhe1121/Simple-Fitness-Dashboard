@@ -458,6 +458,7 @@
         const order = ["auto", "light", "dark"];
         this.theme = order[(order.indexOf(this.theme) + 1) % order.length];
         localStorage.setItem("fit-theme", this.theme);
+        this.applyTheme();
         this.$nextTick(() => {
           if (this.view === "stats") this.renderStatsCharts();
           else if (this.view === "body") this.renderBodyChart();

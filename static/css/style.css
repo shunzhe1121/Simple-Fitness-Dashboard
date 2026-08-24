@@ -203,10 +203,10 @@ button, input, select, textarea {
 .topbar h1 { margin: 0; font-size: 16px; font-weight: 500; }
 .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
 
-.date-nav { display: flex; align-items: center; gap: 4px; }
+.date-nav { display: flex; align-items: center; gap: 6px; }
 .date-arrow {
-  width: 28px;
-  height: 30px;
+  width: 32px;
+  height: 34px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -214,16 +214,24 @@ button, input, select, textarea {
   border-radius: var(--radius-sm);
   background: var(--surface-2);
   color: var(--text-2);
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1;
   cursor: pointer;
+  flex: 0 0 auto;
+  transition: background .15s ease, color .15s ease;
 }
 .date-arrow:hover { background: var(--surface-3); color: var(--text); }
+.date-arrow:active { background: var(--accent-soft); }
 .date-input {
   padding: 6px 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  min-width: 0;
+  max-width: 150px;
+  flex: 0 1 auto;
 }
 
 .scroll { flex: 1; overflow-y: auto; padding: 20px 22px 40px; }
