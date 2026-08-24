@@ -1,12 +1,12 @@
 <p align="center"><a href="README-CN.md">简体中文</a> · <b>English</b></p>
 
-# Simple Fitness Recorder
+# Simple Fitness Recorder: local-first fitness tracker with daily calorie targets and an optional AI assistant
 
-> A local-first fitness tracker (Chinese UI). Log diet / workout / body measurements, auto-compute your daily calorie target and deficit, and visualize the trends. Ships in two forms — a **web app** and an **Android app** — and keeps all your data on your own device, with no server upload.
+Simple Fitness Recorder is a local-first fitness tracker to help you log diet, workouts, and body measurements, and track your daily calorie target. All data stays on your device; nothing is uploaded to any server.
+
+It ships in two forms — a web app (FastAPI + Vue 3) and an Android app (Capacitor-packed PWA) — sharing the same record model and syncing through JSON export / import.
 
 ## Screenshots
-
-The desktop version runs a FastAPI + Vue 3 app in your browser; the mobile version is a Capacitor-packaged Android app that stores data on-device. The four images below are real screenshots of the running app.
 
 #### Desktop · Today's overview
 
@@ -24,85 +24,82 @@ The desktop version runs a FastAPI + Vue 3 app in your browser; the mobile versi
 
 <p align="center"><img src="assets/screenshots/mobile-stats.png" width="320" alt="Mobile statistics"></p>
 
-## Features
+## Installation
 
-- **Three record types**: diet (meal / food / portion / calories / macros), workout (muscle group / duration / burn / note), and body (weight / body-fat / waist), with inline edit and soft-delete (recoverable from the trash).
-- **Goal & deficit chain**: BMR (Mifflin-St Jeor) → TDEE (activity factor) → daily target (goal factor); today's workout burn raises the effective target live, so the calorie ring and the deficit stay in sync.
-- **Visual stats**: calorie ring, macro progress bars, daily summary, plus range trend lines, macro split, and workout distribution charts.
-- **Assisted entry**: paste vision-model OCR output in a template and parse locally (no LLM cost), or enter manually.
-- **Optional AI assistant**: connect any OpenAI-compatible endpoint (e.g. SiliconFlow / DeepSeek) for natural-language logging and queries; delete actions ask for a second confirmation. Everything works without it.
-- **Clean monochrome UI**: light / dark theme toggle; sidebar layout on the web, bottom navigation on mobile; floating chat button never blocks the underlying interaction.
-- **Cross-platform sync**: web and mobile share the same record model; export JSON and re-import on either side, de-duplicated by record type + id.
+### Web app
 
-## Two forms
-
-| | Web (desktop) | Mobile (Android) |
-| --- | --- | --- |
-| Storage | Local SQLite (`data/`, never uploaded) | Local IndexedDB (works offline) |
-| How it runs | Start FastAPI locally, open in a browser | Install the APK, runs as a standalone app |
-| Best for | Logging and reviewing on a computer | Logging on the go |
-| AI configuration | Server-side `.env` | In-app Settings page, key stays on the device |
-| Relationship | They coexist and complement each other; sync via JSON export / import | Same |
-
-## Quick start
-
-### Web
+Requires Python 3.10+.
 
 ```bash
-# 1. Recommended: use a virtual environment to avoid polluting system Python
+git clone git@github.com:shunzhe1121/Simple-Fitness-Dashboard.git
+cd Simple-Fitness-Dashboard
 python -m venv .venv
-source .venv/bin/activate            # Windows: .venv\Scripts\activate
-
-# 2. Install dependencies
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
+```
 
-# 3. (Optional) Configure the AI assistant. If you skip this, the chat is disabled
-#    but every other feature still works.
-cp .env.example .env
-# Edit .env and set the OpenAI-compatible endpoint:
-#   LLM_API_KEY=sk-xxx
-#   LLM_BASE_URL=https://api.siliconflow.cn/v1   # any OpenAI-compatible service works
-#   LLM_MODEL=deepseek-ai/DeepSeek-V3
+### Android app
 
-# 4. Start the server
+Install an APK from the `apk/` directory:
+
+- `apk/fitness-recorder-v1.0.3-release.apk` — production-signed, supports in-place upgrade
+- `apk/fitness-recorder-v1.0.3-debug.apk` — debug-signed, ~3.9 MB, quick trial
+
+Allow "install from unknown sources" on first install.
+
+## Usage
+
+### Web app
+
+```bash
 python run.py
 ```
 
-Then open `http://127.0.0.1:8000`. If the server is bound to `0.0.0.0`, a phone on the same Wi-Fi can reach it at the LAN address — handy for the photo → OCR → paste workflow.
+Open http://127.0.0.1:8000. On the same Wi-Fi, a phone can reach the server at the LAN address printed on startup.
 
-> Double-clicking `run.py` usually fails because the system Python doesn't have the dependencies. Always run it from a terminal inside a virtualenv (or any Python where you've installed the requirements).
+- Log diet (meal / food / portion / calories / macros), workouts (muscle group / duration / burn), and body measurements (weight / body fat / waist); rows support inline edit and soft delete with trash recovery.
+- The daily calorie target is derived from BMR (Mifflin-St Jeor) → TDEE (activity factor) → goal factor; today's workout burn raises the effective target live.
+- Paste vision-model OCR output in the template format to parse and store locally, with no LLM cost.
+- Optional: set an OpenAI-compatible API key in `.env` to enable the natural-language assistant.
 
-### Mobile (Android)
+### Android app
 
-Install one of the APKs from the `apk/` directory in this repo:
+Run the app; all data stays on-device (IndexedDB) and works offline. Enable the AI assistant in Settings with an OpenAI-compatible key. Export all JSON in Settings to back up, migrate, or share — re-importing the same file is a no-op, de-duplicated by record type + id.
 
-- `fitness-recorder-v1.0.3-release.apk` — production-signed, supports in-place upgrade (recommended)
-- `fitness-recorder-v1.0.3-debug.apk` — debug-signed, ~3.9MB, good for a quick trial
+## Project Structure
 
-You'll need to allow "install from unknown sources" on first install. All data is stored on-device and works fully offline. To enable the AI assistant, fill in the OpenAI-compatible API key on the in-app Settings page (the key stays on the device).
+```
+repo/
+├── app/                  FastAPI backend: API routes, SQLite repository, nutrition & parser logic, LangGraph agent
+├── static/               Web frontend (Vue 3 + Chart.js, served by FastAPI)
+├── pwa/                  Mobile web assets (Vue 3 + IndexedDB, zero build, packed into the APK)
+├── mobile/               Capacitor 6 Android project wrapping pwa/
+├── apk/                  Built Android APK artifacts
+├── assets/screenshots/   README screenshots
+├── run.py                Web entry point
+└── requirements.txt      Python dependencies
+```
 
-## Data backup and migration
+| Path | Purpose | Relation |
+|---|---|---|
+| `app/` | FastAPI backend: routes, SQLite data layer, nutrition, parser, LangGraph agent | Serves `static/`; shares the record model with `pwa/` |
+| `static/` | Web frontend (Vue 3) | Client of `app/`'s `/api` endpoints |
+| `pwa/` | Mobile web assets (Vue 3 + IndexedDB) | Wrapped by `mobile/`; syncs with `app/` via JSON export/import |
+| `mobile/` | Capacitor 6 Android project | Packages `pwa/` into the APKs in `apk/` |
+| `apk/` | Built Android APKs | Output of the `mobile/` build |
 
-Both the web and mobile Settings pages offer **Export all JSON**, which includes your profile, goals, and every record (including the trash). Share the file with someone else; once they import it, they have the same data. Re-importing the same file is a no-op — duplicates are dropped by record type + id (set union, not accumulation).
+## Contributing
 
-## Tech stack
-
-- **Backend**: FastAPI + SQLite + LangGraph (OpenAI-compatible, defaults to DeepSeek-V3)
-- **Frontend**: Vue 3 + Chart.js (vendored locally for offline use, CDN fallback)
-- **Architecture**: API-first — the web UI is just one client. The mobile app is a pure-frontend shell that stores data locally and syncs with the web app via JSON export / import.
-
-## Build from source (optional)
-
-- **Web**: `pip install -r requirements.txt && python run.py`, as above.
-- **Mobile**: `pwa/` holds the pure-frontend web assets (Vue 3 + IndexedDB, zero build step); `mobile/` is a Capacitor 6 project that wraps `pwa/` into a native Android WebView shell. After editing `pwa/`, run `cap sync` inside `mobile/` to copy assets, then build the APK. Release builds need your own signing keystore (not committed to this repo). Windows + Chinese paths + sandboxed environments have known pitfalls — see the project's `capacitor-apk-build` notes.
-
-## Roadmap
-
-- [ ] Multiple profiles / users
-- [ ] Exercise library and plan templates
-- [ ] Weight / body-fat trend forecasting
-- [ ] Better dark-theme persistence on the web
+1. Fork the repository.
+2. Create a branch: `git checkout -b feature/xxx`.
+3. Make changes and add tests.
+4. Run all tests locally and make sure they pass.
+5. Open a pull request describing (a) motivation and (b) impact scope.
 
 ## License
 
-This project does not currently declare an open-source license. Please contact the author before redistributing or using it commercially.
+No license file yet. Contact the author before reuse.
+
+## Contact
+
+Open an issue at https://github.com/shunzhe1121/Simple-Fitness-Dashboard/issues
