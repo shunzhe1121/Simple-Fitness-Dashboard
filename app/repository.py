@@ -602,17 +602,33 @@ def export_all() -> dict:
 
 
 def import_all(data: dict, replace: bool = False) -> dict:
-    """回导数据。replace 为真时先清空同类记录。"""
+    """回导数据。replace 为真时先清空同类记录。
+
+    兼容两种备份格式：
+    - 桌面导出：{"diet": [...], "workout": [...], "body": [...], "profile": ..., "goals": ...}
+    - 手机导出：{"records": [{"type": "diet", ...}, ...], ...}（单数组，每条带 type 字段）
+    """
     result: dict[str, int] = {}
 
     if replace:
         for record_type in RECORD_TYPES:
             db.execute(f"DELETE FROM {RECORD_TYPES[record_type]['table']}")
 
+    records = data.get("records")
+    if isinstance(records, list):
+        # 手机端格式：按每条记录的 type 字段分组；软删除记录直接跳过
+        by_type: dict[str, list] = {}
+        for row in records:
+            if not isinstance(row, dict) or row.get("deletedAt"):
+                continue
+            by_type.setdefault(str(row.get("type")), []).append(row)
+    else:
+        # 桌面格式：顶层已按类型分组
+        by_type = {record_type: (data.get(record_type) or []) for record_type in RECORD_TYPES}
+
     for record_type in RECORD_TYPES:
-        rows = data.get(record_type) or []
         count = 0
-        for row in rows:
+        for row in by_type.get(record_type) or []:
             payload = {
                 key: value
                 for key, value in row.items()
