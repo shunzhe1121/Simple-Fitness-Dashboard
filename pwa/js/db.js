@@ -401,6 +401,19 @@
 
   // ---------------------------------------------------------------- 备份
 
+  // 设备唯一标识：持久化到 kv。导出时写入 device_id，导入时据此判断
+  // 备份是否来自本机 —— 同设备回导用「type:id」兜底去重（本地手动添加的
+  // 记录没有 sourceTypeId），跨设备迁移仍走 sourceTypeId 逻辑（避免不同
+  // 设备的自增 id 撞车被误判为重复而跳过）。
+  async function getDeviceId() {
+    var id = await kvGet("device_id", "");
+    if (!id) {
+      id = "dev-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
+      await kvSet("device_id", id);
+    }
+    return id;
+  }
+
   async function exportAll() {
     var db = await openDB();
     var records = await getAll(tx(db, "records", "readonly"));
@@ -410,6 +423,7 @@
     return {
       app: "fit-pwa",
       version: 1,
+      device_id: await getDeviceId(),
       exported_at: FitUtils.nowStr(),
       profile: profile,
       goals: goals,
@@ -443,11 +457,15 @@
 
     // 去重键 = 类型 + 原 id（sourceTypeId）。桌面版各类型独立自增 id，跨类型 id 会重复，
     // 不能只看 id；手机版自己新增的记录没有 sourceTypeId，靠「id 是否被占用」来避免覆盖。
+    // 本机导出的备份回导时：本地记录（含手动添加的无 sourceTypeId 记录）用「type:本地id」
+    // 兜底注册进 sourceMap，否则导出→导入同一份数据会整批重复。
     var sourceMap = {};
     if (!replace) {
       var existingAll = await getAll(tx(db, "records", "readonly"));
+      var sameDevice = !!(data.device_id && data.device_id === await getDeviceId());
       existingAll.forEach(function (r) {
         if (r.sourceTypeId) sourceMap[r.sourceTypeId] = r;
+        if (sameDevice && r.id !== undefined && r.id !== null) sourceMap[r.type + ":" + r.id] = r;
       });
     }
 
@@ -519,6 +537,7 @@
     rangeStats: rangeStats,
     exportAll: exportAll,
     importAll: importAll,
+    getDeviceId: getDeviceId,
     getSettings: getSettings,
     setSettings: setSettings,
   };
