@@ -810,6 +810,17 @@ code {
   border-color: var(--accent);
 }
 
+/* 记录页 / 分析页顶部标签栏：滚动时冻结，切换无需滚回顶部 */
+.page > .sub-tabs,
+.page > .range-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--bg);
+  padding: 8px 2px 8px;
+  border-bottom: 1px solid var(--border);
+}
+
 /* 设置页折叠提示词 */
 .prompt-details {
   margin-top: 12px;
