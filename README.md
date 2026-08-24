@@ -1,8 +1,8 @@
+<p align="center"><b>简体中文</b> · <a href="README.en.md">English</a></p>
+
 # Simple Fitness Recorder · 健身记录助手
 
 > 本地优先的健身记录助手（中文界面）。记录饮食 / 训练 / 身体数据，自动推算每日热量目标与缺口，并提供可视化统计。支持**网页端**与 **Android App** 两种形态，数据全部存在你自己的设备上，不上传任何服务器。
->
-> [English version →](README.en.md)
 
 ## 界面预览
 

@@ -1,8 +1,8 @@
+<p align="center"><a href="README.md">简体中文</a> · <b>English</b></p>
+
 # Simple Fitness Recorder
 
 > A local-first fitness tracker (Chinese UI). Log diet / workout / body measurements, auto-compute your daily calorie target and deficit, and visualize the trends. Ships in two forms — a **web app** and an **Android app** — and keeps all your data on your own device, with no server upload.
->
-> [简体中文 →](README.md)
 
 ## Screenshots
 
