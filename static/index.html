@@ -40,8 +40,11 @@
       <button class="icon-btn only-mobile" @click="navOpen = true">导航</button>
       <h1>{{ currentNav.label }}</h1>
       <div class="topbar-right">
-        <input type="date" v-model="selectedDate" @change="onDateChange" class="date-input"
-               v-if="['today','diet','workout','body'].includes(view)">
+        <div class="date-nav" v-if="['today','diet','workout','body'].includes(view)">
+          <button class="date-arrow" @click="shiftDate(-1)" aria-label="前一天" title="前一天">‹</button>
+          <input type="date" v-model="selectedDate" @change="onDateChange" class="date-input">
+          <button class="date-arrow" @click="shiftDate(1)" aria-label="后一天" title="后一天">›</button>
+        </div>
       </div>
     </header>
 

@@ -437,6 +437,17 @@
           this.loadBodyTrend();
         }
       },
+      // 日期左右箭头：按天前后切换选中日期，并刷新当前页数据
+      shiftDate(delta) {
+        const d = new Date(this.selectedDate + "T00:00:00");
+        if (isNaN(d.getTime())) return;
+        d.setDate(d.getDate() + delta);
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, "0");
+        const day = String(d.getDate()).padStart(2, "0");
+        this.selectedDate = y + "-" + m + "-" + day;
+        this.onDateChange();
+      },
       applyTheme() {
         const html = document.documentElement;
         if (this.theme === "light") html.setAttribute("data-theme", "light");
@@ -752,14 +763,37 @@
         if (record_type) url += "&record_type=" + record_type;
         window.location.href = url;
       },
+      // 读 JSON 文件：先按严格 UTF-8 解码，失败回退 GBK（覆盖备份文件被
+      // 微信/邮件等中间环节按 GBK 转码后再发的常见场景），解析前剥 UTF-8 BOM。
+      async readJsonText(file) {
+        const buf = await file.arrayBuffer();
+        let text = "";
+        try {
+          text = new TextDecoder("utf-8", { fatal: true }).decode(buf);
+        } catch (_) {
+          try {
+            text = new TextDecoder("gbk").decode(buf);
+          } catch (e2) {
+            throw new Error("文件编码不识别（仅支持 UTF-8 / GBK）");
+          }
+        }
+        if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
+        return text;
+      },
       async importData(event) {
         const file = event.target.files && event.target.files[0];
         if (!file) return;
         try {
-          const text = await file.text();
+          const text = await this.readJsonText(file);
           const data = JSON.parse(text);
-          await this.api("/api/import", { data: data, replace: false }, "POST");
-          this.notify({ text: "导入完成", tone: "ok" });
+          const res = await this.api("/api/import", { data: data, replace: false }, "POST");
+          const imported = (res && res.imported) || {};
+          const total = Object.keys(imported).reduce((sum, k) => sum + (Number(imported[k]) || 0), 0);
+          if (total > 0) {
+            this.notify({ text: "已导入 " + total + " 条记录", tone: "ok" });
+          } else {
+            this.notify({ text: "没有可导入的记录（文件格式或内容为空）", tone: "warn" });
+          }
           await this.refreshData();
         } catch (e) {
           this.notify({ text: "导入失败：" + e.message, tone: "error" });
