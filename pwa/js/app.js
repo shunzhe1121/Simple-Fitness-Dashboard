@@ -804,7 +804,7 @@
         const file = event.target.files && event.target.files[0];
         if (!file) return;
         try {
-          const text = await file.text();
+          const text = await this.readJsonText(file);
           const data = JSON.parse(text);
           const res = await this.api("/api/import", { data: data, replace: false }, "POST");
           const added = (res && res.added) || 0;
@@ -817,10 +817,28 @@
           // 导入完成后切到今日总览，让用户立刻看到效果（避免停留在 settings 页以为没刷新）
           this.go("today");
         } catch (e) {
-          this.notify({ text: "导入失败：" + e.message, tone: "error" });
+          this.notify({ text: "导入失败：" + (e && e.message ? e.message : String(e)), tone: "error" });
         } finally {
           event.target.value = "";
         }
+      },
+      // 鲁棒读 JSON 文本：先严格 UTF-8 解码（fatal 模式遇到不合法字节即抛错），
+      // 失败回退 GBK，覆盖备份文件被微信/邮件等中间环节按 GBK 转码后再发的常见场景。
+      // 解析前剥 UTF-8 BOM。
+      async readJsonText(file) {
+        const buf = await file.arrayBuffer();
+        let text = "";
+        try {
+          text = new TextDecoder("utf-8", { fatal: true }).decode(buf);
+        } catch (_) {
+          try {
+            text = new TextDecoder("gbk").decode(buf);
+          } catch (e2) {
+            throw new Error("文件编码不识别（仅支持 UTF-8 / GBK）");
+          }
+        }
+        if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
+        return text;
       },
       async loadTrash() {
         this.trash = {};
