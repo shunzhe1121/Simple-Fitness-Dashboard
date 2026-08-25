@@ -42,10 +42,10 @@ pip install -r requirements.txt
 
 Install an APK from the `apk/` directory:
 
-- `apk/fitness-recorder-v1.0.5-release.apk` — production-signed, supports in-place upgrade
-- `apk/fitness-recorder-v1.0.5-debug.apk` — debug-signed, ~4.1 MB, quick trial
+- `apk/fitness-recorder-v1.0.6-release.apk` — production-signed, supports in-place upgrade
+- `apk/fitness-recorder-v1.0.6-debug.apk` — debug-signed, ~4.1 MB, quick trial
 
-Latest release with both APKs: [GitHub Releases](https://github.com/shunzhe1121/Simple-Fitness-Dashboard/releases/tag/v1.0.5).
+Latest release with both APKs: [GitHub Releases](https://github.com/shunzhe1121/Simple-Fitness-Dashboard/releases/tag/v1.0.6).
 
 Allow "install from unknown sources" on first install.
 

@@ -42,10 +42,10 @@ pip install -r requirements.txt
 
 安装 `apk/` 目录下的安装包：
 
-- `apk/fitness-recorder-v1.0.5-release.apk` — 正式签名包，可覆盖升级
-- `apk/fitness-recorder-v1.0.5-debug.apk` — 调试签名包，约 4.1 MB，可直接安装试用
+- `apk/fitness-recorder-v1.0.6-release.apk` — 正式签名包，可覆盖升级
+- `apk/fitness-recorder-v1.0.6-debug.apk` — 调试签名包，约 4.1 MB，可直接安装试用
 
-最新版本（含两个安装包）也可从 [GitHub Releases](https://github.com/shunzhe1121/Simple-Fitness-Dashboard/releases/tag/v1.0.5) 直接下载。
+最新版本（含两个安装包）也可从 [GitHub Releases](https://github.com/shunzhe1121/Simple-Fitness-Dashboard/releases/tag/v1.0.6) 直接下载。
 
 首次安装需允许「安装未知来源应用」。
 
