@@ -35,15 +35,51 @@ RECORD_TYPES: dict[str, dict] = {
     "workout": {
         "table": "workout_records",
         "label": "训练",
-        "fields": ["date", "category", "duration_min", "calories", "note"],
-        "numeric": ["duration_min", "calories"],
+        "fields": [
+            "date",
+            "category",
+            "duration_min",
+            "calories",
+            "distance_km",
+            "avg_hr",
+            "source",
+            "note",
+        ],
+        "numeric": ["duration_min", "calories", "distance_km", "avg_hr"],
         "required": ["category"],
     },
     "body": {
         "table": "body_records",
         "label": "身体",
-        "fields": ["date", "weight", "body_fat", "waist", "note"],
-        "numeric": ["weight", "body_fat", "waist"],
+        "fields": [
+            "date",
+            "weight",
+            "body_fat",
+            "waist",
+            "sleep_hours",
+            "deep_sleep_min",
+            "rem_sleep_min",
+            "sleep_score",
+            "resting_hr",
+            "stress_avg",
+            "steps",
+            "calories_burned",
+            "source",
+            "note",
+        ],
+        "numeric": [
+            "weight",
+            "body_fat",
+            "waist",
+            "sleep_hours",
+            "deep_sleep_min",
+            "rem_sleep_min",
+            "sleep_score",
+            "resting_hr",
+            "stress_avg",
+            "steps",
+            "calories_burned",
+        ],
         "required": [],
     },
 }
@@ -108,6 +144,63 @@ def add_records(record_type: str, items: list[dict]) -> list[dict]:
     if not items:
         raise RepositoryError("没有可写入的记录")
     return [add_record(record_type, item) for item in items]
+
+
+# ------------------------------------------------ Garmin 同步合并写入
+
+
+def upsert_device_record(record_type: str, data: dict, match: dict) -> dict:
+    """设备数据（佳明）按日期（与附加键）合并写入。
+
+    合并规则：
+    - 找不到已有记录 → 整条插入，source=garmin；
+    - 已有记录是 garmin 来源 → 用新数据整体覆盖（设备数据以最新为准）；
+    - 已有记录是 user 来源 → 只回填 user 留空的字段，绝不覆盖用户手填的值。
+    match 传 {"date": ...} 或 {"date": ..., "category": ...}。
+    """
+    meta = _meta(record_type)
+    cleaned = _normalize(record_type, data)
+    cleaned["source"] = "garmin"
+    cleaned["created_at"] = utils.now_str()
+
+    where = " AND ".join(f"{k} = ?" for k in match)
+    row = db.query_one(
+        f"SELECT * FROM {meta['table']} WHERE {where} AND deleted_at IS NULL "
+        "ORDER BY id DESC LIMIT 1",
+        tuple(match.values()),
+    )
+
+    if row is None:
+        columns = ", ".join(cleaned)
+        placeholders = ", ".join("?" for _ in cleaned)
+        new_id = db.execute(
+            f"INSERT INTO {meta['table']} ({columns}) VALUES ({placeholders})",
+            tuple(cleaned.values()),
+        )
+        return get_record(record_type, new_id)
+
+    if (row.get("source") or "manual") != "garmin":
+        # 用户来源：字段级回填，只补空缺。
+        fillable = {
+            k: v for k, v in cleaned.items() if v is not None and row.get(k) is None
+        }
+        if not fillable:
+            return row
+        sets = ", ".join(f"{k} = ?" for k in fillable)
+        db.execute(
+            f"UPDATE {meta['table']} SET {sets} WHERE id = ?",
+            (*fillable.values(), row["id"]),
+        )
+        return get_record(record_type, row["id"])
+
+    # garmin 来源：整体刷新，但保留 id 与 created_at。
+    cleaned.pop("created_at", None)
+    sets = ", ".join(f"{k} = ?" for k in cleaned)
+    db.execute(
+        f"UPDATE {meta['table']} SET {sets} WHERE id = ?",
+        (*cleaned.values(), row["id"]),
+    )
+    return get_record(record_type, row["id"])
 
 
 def get_record(record_type: str, record_id: int) -> dict | None:
@@ -587,6 +680,48 @@ def prune_chat_messages(keep_days: int) -> int:
 
 
 # ---------------------------------------------------------------- 导出导入
+
+
+# ------------------------------------------------ 日报与同步日志
+
+
+def save_daily_report(date: str, content: str, model: str | None) -> None:
+    """保存或覆盖某天的 AI 日报。"""
+    db.execute(
+        "INSERT INTO daily_reports (date, content, model, created_at) "
+        "VALUES (?, ?, ?, ?) "
+        "ON CONFLICT(date) DO UPDATE SET content = excluded.content, "
+        "model = excluded.model, created_at = excluded.created_at",
+        (date, content, model, utils.now_str()),
+    )
+
+
+def get_daily_report(date: str) -> dict | None:
+    return db.query_one("SELECT * FROM daily_reports WHERE date = ?", (date,))
+
+
+def list_daily_reports(limit: int = 30) -> list[dict]:
+    """日报列表（不含正文，避免列表接口过大）。"""
+    return db.query(
+        "SELECT date, model, created_at FROM daily_reports "
+        "ORDER BY date DESC LIMIT ?",
+        (limit,),
+    )
+
+
+def mark_garmin_synced(date: str, kinds: str) -> None:
+    db.execute(
+        "INSERT INTO garmin_sync_log (date, kinds, synced_at) VALUES (?, ?, ?) "
+        "ON CONFLICT(date) DO UPDATE SET kinds = excluded.kinds, "
+        "synced_at = excluded.synced_at",
+        (date, kinds, utils.now_str()),
+    )
+
+
+def last_garmin_sync() -> dict | None:
+    return db.query_one(
+        "SELECT * FROM garmin_sync_log ORDER BY date DESC LIMIT 1"
+    )
 
 
 def export_all() -> dict:

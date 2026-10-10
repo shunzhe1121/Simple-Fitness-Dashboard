@@ -116,6 +116,16 @@ def _system_prompt() -> str:
     missing = nutrition.missing_profile_fields(profile)
     profile_status = "完整" if not missing else "缺 " + "、".join(missing)
 
+    # 长期记忆（data/memory/ 下的 profile.md 与 summary.md）
+    from .. import memory as memory_mod
+
+    memory_text = memory_mod.load_memory()
+    memory_block = (
+        f"\n关于用户的长期记忆（用户自己的档案，可信）：\n{memory_text}\n"
+        if memory_text
+        else ""
+    )
+
     return f"""你是「健身记录助手」这个网页程序的操作 Agent。你不只是聊天，
 你能直接读写它的数据库、修改条目、切换界面。
 
@@ -123,6 +133,7 @@ def _system_prompt() -> str:
 用户资料：{profile_text}
 当前目标：{goals_text}
 档案状态：{profile_status}
+{memory_block}
 
 通用铁律：回复里凡是声称「已记录 / 已保存 / 已设置 / 已修改 / 已删除 / 已切换 / 已计算」
 等动作，都必须由 tool_calls 真正执行过；只靠文字确认而 tool_calls 为空就是空头支票，

@@ -5,3 +5,8 @@ pydantic>=2.6.0
 langgraph>=0.2.28
 langchain-core>=0.3.0
 langchain-openai>=0.2.0
+# 佳明同步（garth 镜像源解析异常时，先装 requirements 其余包，再单独装 garth）
+garth>=0.8.0
+pydantic-settings>=2.0.0
+requests-oauthlib>=2.0.0
+requests>=2.31.0

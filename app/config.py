@@ -47,6 +47,14 @@ LLM_BASE_URL = _text("LLM_BASE_URL")
 LLM_MODEL = _text("LLM_MODEL")
 LLM_TEMPERATURE = _float("LLM_TEMPERATURE", 0.2)
 
+# ---- 佳明同步配置 ----
+GARMIN_EMAIL = _text("GARMIN_EMAIL")
+GARMIN_PASSWORD = _text("GARMIN_PASSWORD")
+
+# 日报输出目录（MD 归档）
+REPORTS_DIR = Path(_text("REPORTS_DIR", "data/reports"))
+REPORTS_DIR = REPORTS_DIR if REPORTS_DIR.is_absolute() else BASE_DIR / REPORTS_DIR
+
 # ---- 服务监听配置 ----
 HOST = _text("HOST", "0.0.0.0")
 PORT = _int("PORT", 8000)

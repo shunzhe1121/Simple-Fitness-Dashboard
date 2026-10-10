@@ -37,6 +37,9 @@ CREATE TABLE IF NOT EXISTS workout_records (
     category    TEXT    NOT NULL,
     duration_min REAL,
     calories    REAL,
+    distance_km REAL,
+    avg_hr      REAL,
+    source      TEXT    DEFAULT 'manual',
     note        TEXT,
     created_at  TEXT    NOT NULL,
     deleted_at  TEXT
@@ -48,9 +51,32 @@ CREATE TABLE IF NOT EXISTS body_records (
     weight      REAL,
     body_fat    REAL,
     waist       REAL,
+    sleep_hours REAL,
+    deep_sleep_min REAL,
+    rem_sleep_min REAL,
+    sleep_score INTEGER,
+    resting_hr  REAL,
+    stress_avg  REAL,
+    steps       INTEGER,
+    calories_burned REAL,
+    source      TEXT    DEFAULT 'manual',
     note        TEXT,
     created_at  TEXT    NOT NULL,
     deleted_at  TEXT
+);
+
+CREATE TABLE IF NOT EXISTS daily_reports (
+    date        TEXT PRIMARY KEY,
+    content     TEXT NOT NULL,
+    model       TEXT,
+    created_at  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS garmin_sync_log (
+    date        TEXT NOT NULL,
+    kinds       TEXT,
+    synced_at   TEXT NOT NULL,
+    PRIMARY KEY (date)
 );
 
 CREATE TABLE IF NOT EXISTS user_profile (
@@ -123,6 +149,34 @@ def init_db() -> None:
         conn.executescript(SCHEMA)
         conn.execute("INSERT OR IGNORE INTO user_profile (id) VALUES (1)")
         conn.execute("INSERT OR IGNORE INTO goals (id) VALUES (1)")
+        _migrate(conn)
+
+
+# 已有库的增量迁移：PRAGMA 里查不到的列就 ALTER 加上，
+# 旧数据保持原样，新列默认为 NULL。
+_MIGRATIONS: list[tuple[str, str]] = [
+    ("workout_records", "distance_km REAL"),
+    ("workout_records", "avg_hr REAL"),
+    ("workout_records", "source TEXT DEFAULT 'manual'"),
+    ("body_records", "sleep_hours REAL"),
+    ("body_records", "deep_sleep_min REAL"),
+    ("body_records", "rem_sleep_min REAL"),
+    ("body_records", "sleep_score INTEGER"),
+    ("body_records", "resting_hr REAL"),
+    ("body_records", "stress_avg REAL"),
+    ("body_records", "steps INTEGER"),
+    ("body_records", "calories_burned REAL"),
+    ("body_records", "source TEXT DEFAULT 'manual'"),
+]
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    """对老库逐列检查并补齐新增字段。"""
+    for table, column_def in _MIGRATIONS:
+        column = column_def.split()[0]
+        existing = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+        if column not in existing:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column_def}")
 
 
 def query(sql: str, params: tuple = ()) -> list[dict]:

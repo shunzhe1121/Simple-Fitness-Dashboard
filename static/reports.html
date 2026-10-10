@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI 日报</title>
+<link rel="stylesheet" href="/css/style.css">
+<style>
+  .report-wrap { max-width: 720px; margin: 0 auto; padding: 24px 16px 80px; }
+  .report-list { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+  .report-list button {
+    border: 1px solid var(--border, #ddd); background: var(--card, #fff);
+    border-radius: 8px; padding: 6px 12px; cursor: pointer; font-size: 14px;
+  }
+  .report-list button.active { background: var(--primary, #2563eb); color: #fff; }
+  .report-body { line-height: 1.7; }
+  .report-body h1 { font-size: 1.4em; } .report-body h2 { font-size: 1.15em; margin-top: 1.2em; }
+  .report-body ul { padding-left: 1.4em; }
+  .meta { color: #888; font-size: 13px; margin-bottom: 16px; }
+</style>
+</head>
+<body>
+<div class="report-wrap">
+  <h1>AI 日报</h1>
+  <div class="report-list" id="list"></div>
+  <div class="meta" id="meta"></div>
+  <div class="report-body" id="body">加载中…</div>
+</div>
+<script>
+const $ = (id) => document.getElementById(id);
+
+async function loadList() {
+  const res = await fetch("/api/reports");
+  const data = await res.json();
+  const list = $("list");
+  list.innerHTML = "";
+  if (!data.reports.length) {
+    list.innerHTML = "<span>还没有日报。可先在「AI 对话」里说「生成昨天的日报」，或 POST /api/reports/generate。</span>";
+    $("body").textContent = "";
+    return;
+  }
+  data.reports.forEach((r, i) => {
+    const btn = document.createElement("button");
+    btn.textContent = r.date;
+    btn.onclick = () => loadReport(r.date, btn);
+    list.appendChild(btn);
+    if (i === 0) loadReport(r.date, btn);
+  });
+}
+
+async function loadReport(date, btn) {
+  document.querySelectorAll(".report-list button").forEach(b => b.classList.remove("active"));
+  if (btn) btn.classList.add("active");
+  const res = await fetch(`/api/reports/${date}?html=true`);
+  const data = await res.json();
+  const r = data.report;
+  $("meta").textContent = `${r.date} · ${r.model ? "模型：" + r.model : "本地模板（AI 未生成）"} · 更新于 ${r.created_at}`;
+  $("body").innerHTML = r.html;
+}
+
+loadList();
+</script>
+</body>
+</html>

@@ -54,9 +54,43 @@ def banner() -> None:
     print("  " + "-" * 46 + "\n")
 
 
+def _daily_job() -> None:
+    """后台每日任务：佳明同步 + 昨日日报生成。
+
+    放在守护线程里跑，失败只打日志不影响服务启动——
+    同步与日报都是幂等操作，下次启动或手动触发会补上。
+    """
+    import threading
+    import time
+    from datetime import datetime, timedelta
+
+    def job() -> None:
+        while True:
+            # 每天早上 8 点后第一次检查时执行
+            now = datetime.now()
+            target = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+            if now.hour >= 8:
+                try:
+                    from app import garmin, report, repository
+
+                    if config.GARMIN_EMAIL and config.GARMIN_PASSWORD:
+                        garmin.sync(days=7)
+                        print("  [garmin] 同步完成")
+                    if not repository.get_daily_report(target):
+                        result = report.generate(target)
+                        print(f"  [report] {target} 生成完成（fallback={result.get('fallback')}）")
+                except Exception as error:
+                    print(f"  [daily-job] 失败（明天重试）：{error}")
+            # 距下次检查睡 1 小时
+            time.sleep(3600)
+
+    threading.Thread(target=job, daemon=True).start()
+
+
 def main() -> None:
     db.init_db()
     banner()
+    _daily_job()
     uvicorn.run(
         "app.api:app",
         host=config.HOST,

@@ -440,6 +440,95 @@ def import_data(payload: ImportPayload) -> dict:
     return {"imported": result}
 
 
+# ---------------------------------------------------------------- 佳明同步 / 日报 / 记忆
+
+
+class GarminSyncPayload(BaseModel):
+    days: int = 7
+    until: Optional[str] = None
+
+
+class ReportPayload(BaseModel):
+    date: Optional[str] = None
+    force: bool = False
+
+
+class MemoryPayload(BaseModel):
+    profile: str
+
+
+@app.get("/api/garmin/status")
+def garmin_status() -> dict:
+    return {
+        "configured": bool(config.GARMIN_EMAIL and config.GARMIN_PASSWORD),
+        "last_sync": repository.last_garmin_sync(),
+    }
+
+
+@app.post("/api/garmin/sync")
+def garmin_sync(payload: GarminSyncPayload) -> dict:
+    """从 Garmin Connect 同步最近 n 天数据（睡眠/消耗/心率/步数/活动）。"""
+    if not (config.GARMIN_EMAIL and config.GARMIN_PASSWORD):
+        raise HTTPException(400, "请在 .env 配置 GARMIN_EMAIL / GARMIN_PASSWORD")
+    from . import garmin
+
+    try:
+        return garmin.sync(
+            days=max(1, min(payload.days, 30)),
+            until=payload.until,
+        )
+    except RuntimeError as error:
+        raise HTTPException(400, str(error)) from error
+    except Exception as error:  # 网络失败、token 过期等
+        raise HTTPException(502, f"佳明同步失败：{error}") from error
+
+
+@app.get("/api/reports")
+def reports_list(limit: int = 30) -> dict:
+    return {"reports": repository.list_daily_reports(limit)}
+
+
+@app.get("/api/reports/{report_date}")
+def reports_get(report_date: str, html: bool = False) -> dict:
+    report = repository.get_daily_report(report_date)
+    if not report:
+        raise HTTPException(404, "该日期还没有日报，可先调用生成接口")
+    if html:
+        from . import report as report_mod
+
+        report = {**report, "html": report_mod.md_to_html(report["content"])}
+    return {"report": report}
+
+
+@app.post("/api/reports/generate")
+def reports_generate(payload: ReportPayload) -> dict:
+    """生成某天日报（已有且未 force 时直接返回缓存）。"""
+    from . import report as report_mod
+
+    try:
+        return report_mod.generate(payload.date, force=payload.force)
+    except Exception as error:
+        raise HTTPException(500, f"日报生成失败：{error}") from error
+
+
+@app.get("/api/memory")
+def memory_get() -> dict:
+    from . import memory as memory_mod
+
+    return {
+        "profile": memory_mod.read_profile(),
+        "summary": memory_mod.read_summary(),
+    }
+
+
+@app.put("/api/memory")
+def memory_put(payload: MemoryPayload) -> dict:
+    from . import memory as memory_mod
+
+    memory_mod.write_profile(payload.profile)
+    return {"saved": True}
+
+
 # ---------------------------------------------------------------- 静态资源
 
 # 静态挂载必须放在所有 /api 路由之后，否则会抢占请求
