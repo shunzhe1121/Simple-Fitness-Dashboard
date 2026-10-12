@@ -1,7 +1,7 @@
 """佳明（Garmin）数据同步。
 
 用 garth 库模拟登录 Garmin Connect，把每日睡眠、热量消耗、心率、
-压力、步数与活动记录（跑步等）拉回来，经字段级合并写入本地库。
+压力、步数、体重与活动记录（跑步等）拉回来，经字段级合并写入本地库。
 
 登录凭据从环境变量 GARMIN_EMAIL / GARMIN_PASSWORD 读取（.env），
 OAuth token 缓存在 data/garmin_tokens/，登录成功后日常同步不需要
@@ -57,12 +57,20 @@ def _resume_or_login(email: str, password: str, domain: str = "garmin.cn") -> No
 
 
 def _days(n: int, until: str | None = None) -> list[str]:
-    """返回最近 n 天的日期串（含 until，默认到今天）。"""
+    """返回最近 n 天的日期串（含 until，默认到今天）。
+
+    早于 config.GARMIN_SINCE 的日期直接剔除：清空历史后重新开始用的场景下，
+    7 天回看窗口会把刚删掉的旧日期又填回来，这里拦一刀。
+    """
     end = utils.resolve_date(until) if until else utils.today_str()
     end_date = date.fromisoformat(end)
-    return [
+    days = [
         (end_date - timedelta(days=i)).isoformat() for i in range(n - 1, -1, -1)
     ]
+    since = config.GARMIN_SINCE
+    if since:
+        days = [d for d in days if d >= since]
+    return days
 
 
 def _num(value) -> float | None:
@@ -146,6 +154,51 @@ def _summary_body(day: str) -> dict | None:
     return body
 
 
+# 称重是稀疏事件（一个月可能只称几次），所以体重不走逐日循环，
+# 单独用一个更宽的回看窗口，电脑关机几天再开机也不会漏掉期间的称重。
+WEIGHT_LOOKBACK_DAYS = 30
+
+
+def _kg(grams) -> float | None:
+    """佳明体重端点一律返回克（与账号的米制/英制设置无关），转成 kg。"""
+    value = _num(grams)
+    if value is None or value <= 0:
+        return None
+    return round(value / 1000, 2)
+
+
+def _weights(start: str, end: str) -> dict[str, dict]:
+    """区间体重查询 → {日期: {weight, body_fat}}。
+
+    用 dateRange 端点一次拿整段区间，比逐日调 dayview 少打很多请求。
+    同一天可能有多次称重，按时间排序后逐个覆盖，自然留下最后一条。
+    没有佳明智能秤时只有 sourceType=MANUAL/USER_SETTING 的体重，
+    bodyFat/bmi/muscleMass 全是 null，这里只取有值的字段。
+    """
+    client = _client()
+    try:
+        raw = client.connectapi(
+            "/weight-service/weight/dateRange",
+            params={"startDate": start, "endDate": end},
+        )
+    except Exception:
+        return {}
+    rows = (raw or {}).get("dateWeightList") or []
+    out: dict[str, dict] = {}
+    for row in sorted(rows, key=lambda r: r.get("date") or 0):
+        day = row.get("calendarDate")
+        if not day:
+            continue
+        fields = {
+            "weight": _kg(row.get("weight")),
+            "body_fat": _num(row.get("bodyFat")),
+        }
+        if all(v is None for v in fields.values()):
+            continue
+        out[day] = fields
+    return out
+
+
 def _activities(day: str) -> list[dict]:
     """当天活动（跑步/骑行等）→ cardio 类 workout 记录。"""
     client = _client()
@@ -202,8 +255,14 @@ def sync(days: int = 7, until: str | None = None, email: str = "", password: str
     _resume_or_login(email, password)
     print("[garmin] 登录成功", flush=True)
 
-    result: dict = {"days": {}, "token_dir": str(TOKEN_DIR)}
-    for day in _days(days, until):
+    days = _days(days, until)
+    result: dict = {
+        "days": {},
+        "token_dir": str(TOKEN_DIR),
+        "weights": {},
+        "errors": [],
+    }
+    for day in days:
         day_info: dict = {"body": False, "activities": 0, "errors": []}
 
         merged_body: dict = {"date": day}
@@ -242,4 +301,26 @@ def sync(days: int = 7, until: str | None = None, email: str = "", password: str
             repository.mark_garmin_synced(day, kinds)
         result["days"][day] = day_info
 
+    _sync_weights(result, until)
     return result
+
+
+def _sync_weights(result: dict, until: str | None) -> None:
+    """体重单独一趟，窗口比逐日数据宽（见 WEIGHT_LOOKBACK_DAYS）。
+
+    写入走 upsert_device_record：日期上已经有用户手填的体重时只补空缺，
+    不会被设备值覆盖，所以这里可以放心地反复重跑这 30 天。
+    """
+    end = utils.resolve_date(until) if until else utils.today_str()
+    start = (date.fromisoformat(end) - timedelta(days=WEIGHT_LOOKBACK_DAYS - 1)).isoformat()
+    if config.GARMIN_SINCE:
+        start = max(start, config.GARMIN_SINCE)
+    if start > end:
+        return  # 起算日之后还没到任何一天，无事可做
+
+    for day, fields in _weights(start, end).items():
+        try:
+            repository.upsert_device_record("body", {"date": day, **fields}, {"date": day})
+            result["weights"][day] = fields
+        except Exception as exc:
+            result["errors"].append(f"{day} 体重写入失败：{str(exc)[:100]}")

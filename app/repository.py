@@ -8,8 +8,15 @@
 from __future__ import annotations
 
 import json
+from datetime import date as _date, timedelta as _timedelta
 
 from . import db, nutrition, utils
+
+# 手表实测总消耗的下限：低于此值视为「当天还没过完」的半截数据，不当作 TDEE
+_MEASURED_BURN_MIN = 1200.0
+# 日均步数参考值与单步消耗，用于把「当前步数」折算成当天的实时消耗
+_DAILY_STEPS_REF = 8000
+_STEP_KCAL = 0.05
 
 # 三类记录的元信息。表名只来自这个字典，不接受外部拼接，
 # 因此 SQL 里直接内插表名是安全的。
@@ -333,6 +340,47 @@ def describe_record(record_type: str, row: dict) -> str:
 # ---------------------------------------------------------------- 汇总统计
 
 
+def latest_measured_burn(date: str | None = None, window_days: int = 7) -> dict | None:
+    """取最近一次「已经过完那一天」的手表实测总消耗，供当日目标与缺口使用。
+
+    佳明的总消耗是「当天 0 点到此刻」的累计值，所以当天任何时刻取到的都只是
+    半截数据：下午 3 点走 1465 步时约 1343 kcal，而全天真实值在 2300 上下。
+    用固定阈值（如 1200）判断是否半截并不可靠——步数少的日子下午就能越过阈值。
+
+    因此这里改用日期来判定完整性：
+      - 所选日期就是今天 → 今天还没过完，往前找**已经结束**的那一天；
+      - 所选日期是过去的日期 → 那天已完整，可以直接用它自己的实测值。
+
+    `_MEASURED_BURN_MIN` 只作为兜底，跳过那种没怎么戴表的整天。
+
+    返回 {"date","calories","is_today"}；找不到时返回 None。
+    """
+    day = utils.resolve_date(date)
+    # 今天还没过完，基准日最多取到昨天；过去日期已完整，可以用它自己
+    if day < utils.today_str():
+        upper = day
+    else:
+        upper = (_date.fromisoformat(day) - _timedelta(days=1)).isoformat()
+    since = (_date.fromisoformat(upper) - _timedelta(days=max(int(window_days), 1))).isoformat()
+
+    rows = db.query(
+        "SELECT date, calories_burned FROM body_records "
+        "WHERE deleted_at IS NULL AND calories_burned IS NOT NULL "
+        "AND date >= ? AND date <= ? ORDER BY date DESC",
+        (since, upper),
+    )
+    for row in rows:
+        burned = row["calories_burned"]
+        if not burned or burned < _MEASURED_BURN_MIN:
+            continue
+        return {
+            "date": row["date"],
+            "calories": float(burned),
+            "is_today": row["date"] == day,
+        }
+    return None
+
+
 def daily_summary(date: str | None = None) -> dict:
     """单日汇总：饮食合计、训练合计、当日身体数据与目标对比。"""
     day = utils.resolve_date(date)
@@ -374,24 +422,64 @@ def daily_summary(date: str | None = None) -> dict:
             )
             tdee = plan["tdee"]
 
+    # 手表实测消耗优先：佳明同步的总消耗（含基础代谢与训练）比公式 TDEE
+    # 更接近真实，缺口与目标都基于实测动态计算；无手表数据回退公式。
+    # 当天还没过完，它的累计值不能用，所以这里拿两样东西：
+    #   measured                 → 最近一次「已过完那天」的实测，作 TDEE 基准
+    #   today_burn / today_steps → 所选日期当天的实时值（按步数推算）
+    measured = latest_measured_burn(day)
+    measured_burn = measured["calories"] if measured else None
+    measured_today = bool(measured and measured["is_today"])
+    tdee_source = "measured" if measured_burn else "formula"
+
+    # 当天消耗按「静息消耗 + 已走步数」实时估算，避免早上只有几百千卡时
+    # 误当成全天消耗。每日基础消耗取最近实测里非活动的那部分（走路按
+    # 0.05 kcal/步粗估），跟手表的静息口径大致对得上。
+    today_floor = None
+    if tdee:
+        today_floor = round(tdee - _STEP_KCAL * _DAILY_STEPS_REF, 1)
+    today_steps = (latest_body or {}).get("steps")
+    today_burn = None
+    if measured_today and measured_burn:
+        today_burn = measured_burn
+    elif today_steps and today_floor is not None:
+        today_burn = round(today_floor + _STEP_KCAL * float(today_steps), 1)
+
     deficit = None
     deficit_band = None
-    if tdee is not None:
-        net = diet_total["calories"] - workout_total["calories"]
-        deficit = round(tdee - net, 1)
+    # 缺口的基准消耗：有当天实时估算就先用它，否则用最近一次完整实测，再退公式
+    baseline_burn = today_burn or measured_burn or tdee
+    if baseline_burn is not None:
+        if measured_burn:
+            # 实测口径：手表总消耗已含训练，净摄入=毛摄入，不再减运动消耗
+            net = diet_total["calories"]
+        else:
+            net = diet_total["calories"] - workout_total["calories"]
+        deficit = round(baseline_burn - net, 1)
         deficit_band = nutrition.classify_deficit(deficit)
 
-    # 有效目标 = 基础目标 + 当日训练消耗。
-    # 训练烧掉的热量算进当日预算：净摄入(饮食−运动)仍以基础目标为基准，
-    # 等价于毛摄入以「基础目标+训练消耗」为基准，环和状态提示才不会误判超目标。
+    # 有效目标 = 基础目标 + 当日训练消耗（公式口径）；
+    # 实测口径下把公式 TDEE 换成手表实测，保持计划偏移量（增肌盈余/减脂缺口）
+    # 不变，消耗高了可吃目标就自动上调——动态推荐。
     daily_calories = goals.get("daily_calories")
     effective_target = None
     if daily_calories:
-        effective_target = round(daily_calories + workout_total["calories"], 1)
+        if measured_burn and goals.get("tdee"):
+            effective_target = round(
+                daily_calories + (measured_burn - goals["tdee"]), 1
+            )
+        else:
+            effective_target = round(daily_calories + workout_total["calories"], 1)
 
     return {
         "date": day,
         "tdee": tdee,
+        "tdee_measured": measured_burn,
+        "tdee_measured_date": measured["date"] if measured else None,
+        "tdee_source": tdee_source,
+        "is_measured_today": measured_today,
+        "today_burn": today_burn,
+        "today_burn_estimated": bool(today_burn and not measured_today),
         "deficit": deficit,
         "deficit_band": deficit_band,
         "target_calories": effective_target,
@@ -721,6 +809,79 @@ def mark_garmin_synced(date: str, kinds: str) -> None:
 def last_garmin_sync() -> dict | None:
     return db.query_one(
         "SELECT * FROM garmin_sync_log ORDER BY date DESC LIMIT 1"
+    )
+
+
+# ------------------------------------------------------- 餐食图片（拍照识餐）
+# 平时拍照攒着，等电脑开着时一次性上传识别。识别出的文本仍交给 parser 解析，
+# 与「粘贴识图结果」共用同一条链路，所以这里只管图片自己的状态流转：
+#   pending → analyzed（已拿到文本）→ imported（已入库）
+#           → failed（识别失败，可重试）
+
+
+def add_meal_image(day: str, stored_name: str, original: str, mime: str) -> dict:
+    """登记一张已落盘的餐食图片。"""
+    record_id = db.execute(
+        "INSERT INTO meal_images (date, original, stored_name, mime, status, created_at) "
+        "VALUES (?, ?, ?, ?, 'pending', ?)",
+        (day, original, stored_name, mime, utils.now_str()),
+    )
+    return get_meal_image(record_id) or {}
+
+
+def get_meal_image(meal_id: int) -> dict | None:
+    return db.query_one(
+        "SELECT * FROM meal_images WHERE id = ? AND deleted_at IS NULL", (meal_id,)
+    )
+
+
+def list_meal_images(day: str | None = None, limit: int = 200) -> list[dict]:
+    """按上传时间倒序列出图片，供前端图库展示。"""
+    if day:
+        return db.query(
+            "SELECT * FROM meal_images WHERE deleted_at IS NULL AND date = ? "
+            "ORDER BY id DESC LIMIT ?",
+            (day, limit),
+        )
+    return db.query(
+        "SELECT * FROM meal_images WHERE deleted_at IS NULL ORDER BY id DESC LIMIT ?",
+        (limit,),
+    )
+
+
+def list_unanalyzed_meal_images(day: str | None = None) -> list[dict]:
+    """待识别或上次失败的图片，按上传顺序返回（先拍的先识别）。"""
+    if day:
+        return db.query(
+            "SELECT * FROM meal_images WHERE deleted_at IS NULL AND date = ? "
+            "AND status IN ('pending', 'failed') ORDER BY id ASC",
+            (day,),
+        )
+    return db.query(
+        "SELECT * FROM meal_images WHERE deleted_at IS NULL "
+        "AND status IN ('pending', 'failed') ORDER BY id ASC"
+    )
+
+
+def update_meal_image(meal_id: int, **fields) -> dict | None:
+    """更新图片状态。字段走白名单，避免把任意键拼进 SQL。"""
+    allowed = {"status", "result_text", "error", "record_ids", "date"}
+    updates = {key: value for key, value in fields.items() if key in allowed}
+    if not updates:
+        return get_meal_image(meal_id)
+    assignments = ", ".join(f"{key} = ?" for key in updates)
+    db.execute(
+        f"UPDATE meal_images SET {assignments} WHERE id = ?",
+        tuple(updates.values()) + (meal_id,),
+    )
+    return get_meal_image(meal_id)
+
+
+def delete_meal_image(meal_id: int) -> int:
+    """软删除图片记录（磁盘文件保留，便于回溯）。"""
+    return db.execute(
+        "UPDATE meal_images SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL",
+        (utils.now_str(), meal_id),
     )
 
 

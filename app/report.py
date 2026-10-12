@@ -84,6 +84,16 @@ def _fallback_report(target: str) -> str:
 
     band = daily.get("deficit_band")
     band_label = band.get("label") if isinstance(band, dict) else band
+    # 消耗口径分三个层次，日报里要讲清楚：公式 TDEE / 最近一次完整实测 / 当天实时值
+    measured = daily.get("tdee_measured")
+    measured_at = daily.get("tdee_measured_date")
+    today_burn = daily.get("today_burn")
+    burn_parts = [f"公式 TDEE {daily.get('tdee') or '未测算'} kcal"]
+    if measured:
+        suffix = "（今天）" if daily.get("is_measured_today") else f"（{measured_at}，最近一次完整数据）"
+        burn_parts.append(f"手表实测总消耗 {measured:g} kcal{suffix}")
+    if today_burn and daily.get("today_burn_estimated"):
+        burn_parts.append(f"当天实时估算 {today_burn:g} kcal（按步数折算，随步数上升）")
     lines = [
         f"# 日报 {target}",
         "",
@@ -91,9 +101,11 @@ def _fallback_report(target: str) -> str:
         "",
         "## 总览",
         "",
-        f"- TDEE：{daily.get('tdee') or '未测算'}；"
-        f"热量缺口：{daily.get('deficit') if daily.get('deficit') is not None else '—'}"
+        "- 总消耗基准：" + "；".join(burn_parts),
+        f"- 热量缺口：{daily.get('deficit') if daily.get('deficit') is not None else '—'}"
         + (f"（{band_label}）" if band_label else ""),
+        f"- 可吃目标 {daily.get('target_calories') or '—'} kcal"
+        + ("（已按手表实测消耗动态调整）" if measured else "（基础目标，无手表数据）"),
         f"- 饮食 {diet_total.get('count', 0)} 条，共 {diet_total.get('calories', 0):g} kcal，"
         f"蛋白质 {diet_total.get('protein', 0):g} g。",
         f"- 训练 {workout_total.get('count', 0)} 条，共 {workout_total.get('duration_min', 0):g} 分钟，"
@@ -187,6 +199,7 @@ _MD_RULES = [
     (re.compile(r"^### (.*)$", re.M), r"<h3>\1</h3>"),
     (re.compile(r"^## (.*)$", re.M), r"<h2>\1</h2>"),
     (re.compile(r"^# (.*)$", re.M), r"<h1>\1</h1>"),
+    (re.compile(r"^> (.*)$", re.M), r"<blockquote>\1</blockquote>"),
     (re.compile(r"\*\*(.+?)\*\*"), r"<strong>\1</strong>"),
     (re.compile(r"^- (.*)$", re.M), r"<li>\1</li>"),
 ]
@@ -200,7 +213,8 @@ def md_to_html(md: str) -> str:
     # 相邻 <li> 合并成 <ul>
     html = re.sub(r"(<li>.*?</li>\n?)+", lambda m: "<ul>" + m.group(0) + "</ul>", html)
     parts = [p for p in html.split("\n\n") if p.strip()]
+    block_tags = ("<h", "<ul>", "<blockquote>")
     return "\n".join(
-        f"<p>{p.strip()}</p>" if not p.lstrip().startswith("<h") and not p.lstrip().startswith("<ul>") else p.strip()
+        f"<p>{p.strip()}</p>" if not p.lstrip().startswith(block_tags) else p.strip()
         for p in parts
     )

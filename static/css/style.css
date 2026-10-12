@@ -260,6 +260,13 @@ button, input, select, textarea {
   margin-bottom: 14px;
   color: var(--text);
 }
+/* 卡片说明文字：解释数据口径，比正文淡一档 */
+.card-sub {
+  margin: -6px 0 12px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--text-2);
+}
 
 .chart-card { padding: 20px 22px 18px; }
 .chart-card .card-title { font-size: 15px; margin-bottom: 16px; }
@@ -377,6 +384,13 @@ button, input, select, textarea {
   font-size: 12.5px;
 }
 .deficit-pop-title { color: var(--text-2); margin-bottom: 8px; }
+.deficit-pop-sub {
+  color: var(--text-3, var(--text-2));
+  line-height: 1.6;
+  padding-bottom: 6px;
+  margin-bottom: 2px;
+  border-bottom: 1px solid var(--border);
+}
 .deficit-pop-row {
   display: grid;
   grid-template-columns: 72px 84px 1fr;
@@ -906,4 +920,227 @@ code {
   .kpi-grid { grid-template-columns: 1fr 1fr; }
   .chart-wrap, .chart-card.is-short .chart-wrap { height: 200px; }
   .ring-wrap { width: 148px; }
+}
+
+/* AI 日报正文 */
+.report-body { line-height: 1.7; padding-top: 12px; }
+.report-body h1 { font-size: 1.3em; margin: 0.4em 0; }
+.report-body h2 { font-size: 1.1em; margin: 1.1em 0 0.4em; }
+.report-body h3 { font-size: 1em; margin: 0.9em 0 0.3em; }
+.report-body ul { padding-left: 1.4em; margin: 0.4em 0; }
+.report-body p { margin: 0.5em 0; }
+.report-body blockquote {
+  margin: 0.6em 0; padding: 8px 12px;
+  border-left: 3px solid var(--border, #ddd); color: var(--muted, #888);
+}
+
+/* ------------------------------------------------ 饮食录入方式切换
+   三种录入方式（图片 / 粘贴 / 手动）共用一张卡，顶部按钮切换，
+   避免三块表单同时铺在页面上互相抢注意力。 */
+
+.entry-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: 18px;
+  background: var(--surface-2);
+  border-radius: var(--radius-pill);
+}
+
+.entry-tab {
+  position: relative;
+  flex: 1;
+  padding: 9px 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-2);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background .15s, color .15s;
+}
+
+.entry-tab:hover { color: var(--text); }
+
+.entry-tab.active {
+  color: var(--text);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+/* 有没处理完的图片时在按钮右上角点一下，不切过去也能看见 */
+.entry-dot {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--c1);
+}
+
+.entry-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.entry-head .hint { margin: 0; }
+
+.notice {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text-2);
+  background: var(--surface-2);
+  border-left: 2px solid var(--warn);
+  border-radius: var(--radius-sm);
+}
+
+.notice strong { color: var(--text); font-weight: 500; }
+
+.notice code {
+  padding: 1px 5px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  background: var(--surface-3);
+  border-radius: 4px;
+}
+
+/* ---- 上传区 ---- */
+
+.drop-zone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 28px 20px;
+  text-align: center;
+  background: var(--surface-2);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+
+.drop-zone:hover,
+.drop-zone.dragging {
+  background: var(--surface-3);
+  border-color: var(--text);
+}
+
+.drop-zone.busy { opacity: .6; cursor: default; }
+
+/* 加号，纯 CSS 画，省一个图标资源 */
+.drop-icon {
+  position: relative;
+  width: 22px;
+  height: 22px;
+}
+
+.drop-icon::before,
+.drop-icon::after {
+  content: "";
+  position: absolute;
+  background: var(--text-3);
+}
+
+.drop-icon::before {
+  left: 50%; top: 0;
+  width: 1.5px; height: 100%;
+  transform: translateX(-50%);
+}
+
+.drop-icon::after {
+  top: 50%; left: 0;
+  width: 100%; height: 1.5px;
+  transform: translateY(-50%);
+}
+
+.drop-main { font-size: 13px; font-weight: 500; color: var(--text); }
+.drop-sub { font-size: 12px; color: var(--text-3); }
+
+/* ---- 图库 ---- */
+
+.meal-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(94px, 1fr));
+  gap: 10px;
+  margin: 16px 0;
+}
+
+.meal-thumb {
+  position: relative;
+  aspect-ratio: 1;
+  overflow: hidden;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.meal-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.meal-badge {
+  position: absolute;
+  left: 5px;
+  bottom: 5px;
+  padding: 2px 7px;
+  font-size: 11px;
+  color: #fff;
+  background: rgba(0, 0, 0, .6);
+  border-radius: var(--radius-pill);
+}
+
+.st-imported .meal-badge { background: rgba(18, 134, 107, .88); }
+.st-failed .meal-badge { background: rgba(212, 69, 63, .88); }
+
+.meal-del {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 22px;
+  height: 22px;
+  font-size: 15px;
+  line-height: 1;
+  color: #fff;
+  background: rgba(0, 0, 0, .55);
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity .15s;
+}
+
+.meal-thumb:hover .meal-del { opacity: 1; }
+
+/* 触屏没有 hover，删除按钮常显 */
+@media (hover: none) {
+  .meal-del { opacity: .92; }
+}
+
+@media (max-width: 560px) {
+  .entry-tab { padding: 8px 6px; font-size: 12px; }
+  .meal-grid { grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); }
+
+  /* 顶栏：390px 宽的屏上标题和日期控件会互相挤到换行，
+     允许顶栏换行、把日期输入压窄，挤不下时日期整体落到第二行 */
+  .topbar { flex-wrap: wrap; gap: 8px; }
+  .topbar h1 { font-size: 15px; white-space: nowrap; }
+  .topbar-right { gap: 6px; }
+  .date-input { max-width: 112px; font-size: 12.5px; }
+  .date-arrow { width: 28px; height: 30px; }
 }

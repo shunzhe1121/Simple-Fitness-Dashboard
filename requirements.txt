@@ -10,3 +10,6 @@ garth>=0.8.0
 pydantic-settings>=2.0.0
 requests-oauthlib>=2.0.0
 requests>=2.31.0
+# 拍照识餐：接收 multipart 上传 + 压缩图片
+python-multipart>=0.0.9
+pillow>=10.0.0

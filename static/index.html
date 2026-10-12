@@ -4,8 +4,16 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#2f6df6">
+<!-- 手机「添加到主屏幕」后像应用一样全屏打开，不带浏览器地址栏 -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="健身记录">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <title>健身记录助手</title>
-<link rel="stylesheet" href="/css/style.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<link rel="icon" href="/icons/icon-192.png">
+<link rel="stylesheet" href="/css/style.css?v=20261012e">
 </head>
 <body>
 <div id="app" class="app" :data-theme="theme === 'auto' ? null : theme" v-cloak>
@@ -68,7 +76,11 @@
                 <button class="info-btn inline" @click="showGoalInfo = !showGoalInfo" title="目标如何计算">?</button>
               </div>
             </div>
-            <div class="ring-bonus" v-if="workoutBonus">
+            <div class="ring-bonus" v-if="measuredBurn">
+              <span v-if="measuredFromPast">已按手表实测消耗 {{ fmt(measuredBurn, 0) }} kcal 动态调整（{{ summary.tdee_measured_date }}）</span>
+              <span v-else>已按今日手表实测消耗 {{ fmt(measuredBurn, 0) }} kcal 动态调整</span>
+            </div>
+            <div class="ring-bonus" v-else-if="workoutBonus">
               <span>含训练加成 +{{ fmt(workoutBonus, 0) }} kcal（{{ fmt(goalCalories, 0) }} + 训练消耗）</span>
             </div>
             <div class="goal-pop" v-if="showGoalInfo">
@@ -79,10 +91,16 @@
                   <tr><td>① BMR 基础代谢</td><td>Mifflin-St Jeor</td><td>{{ fmt(summary.body && summary.body.weight ? summary.body.weight : (profile && profile.latest_weight), 1) || '—' }} kg · 你的 BMR</td></tr>
                   <tr><td>② TDEE 每日总消耗</td><td>BMR × 活动系数</td><td>BMR × {{ (goals && goals.activity_factor) || '1.2' }} ≈ {{ fmt(summary.tdee, 0) }} kcal</td></tr>
                   <tr><td>③ 每日目标</td><td>TDEE × 目标系数</td><td>{{ fmt(summary.tdee, 0) }} × {{ goals && goals.goal_ratio ? goals.goal_ratio : '1.10' }} ≈ {{ fmt(goalCalories, 0) }} kcal</td></tr>
-                  <tr><td>④ 有效目标</td><td>每日目标 + 训练消耗</td><td>{{ fmt(goalCalories, 0) }} + {{ fmt(workoutBonus, 0) }} = {{ fmt(effectiveGoal, 0) }} kcal</td></tr>
+                  <tr v-if="measuredBurn"><td>④ 实测修正</td><td>每日目标 +（手表实测 − TDEE）</td><td>{{ fmt(goalCalories, 0) }} + ({{ fmt(measuredBurn, 0) }} − {{ fmt(summary.tdee, 0) }}) = {{ fmt(effectiveGoal, 0) }} kcal</td></tr>
+                  <tr v-else><td>④ 有效目标</td><td>每日目标 + 训练消耗</td><td>{{ fmt(goalCalories, 0) }} + {{ fmt(workoutBonus, 0) }} = {{ fmt(effectiveGoal, 0) }} kcal</td></tr>
                 </tbody>
               </table>
-              <div class="goal-pop-note">活动系数：久坐 1.2 · 轻度 1.375 · 中度 1.55 · 高强度 1.725<br>目标系数：减脂 ×0.80 · 维持 ×1.00 · 增肌 ×1.10</div>
+              <div class="goal-pop-note">
+                活动系数：久坐 1.2 · 轻度 1.375 · 中度 1.55 · 高强度 1.725<br>
+                目标系数：减脂 ×0.80 · 维持 ×1.00 · 增肌 ×1.10<br>
+                配了手表时第 ④ 步把手表实测的全天总消耗（含基础代谢，比公式准）换成基准，
+                公式不改变你的热量缺口方向，只是让「今天能吃多少」跟着真实消耗浮动。
+              </div>
             </div>
             <div class="deficit-box" v-if="summary.tdee">
               <div class="deficit-line">
@@ -95,7 +113,13 @@
               </div>
             </div>
             <div class="deficit-pop" v-if="showDeficitInfo && summary.tdee">
-              <div class="deficit-pop-title">缺口 = 有效目标 − 净摄入（饮食 − 运动消耗）</div>
+              <div class="deficit-pop-title">缺口 = 当天总消耗 − 净摄入</div>
+              <div class="deficit-pop-sub">
+                当天总消耗取手表数据：所选日期已经过完，就直接用那天的实测；
+                若看的是今天，全天还没走完，按「静息消耗 + 已走步数」推算全天
+                （约 {{ fmt(todayBurn, 0) }} kcal）。完全没有手表数据才用公式 TDEE。
+                净摄入 = 饮食摄入（手表口径下不再重复减运动消耗）。
+              </div>
               <div v-for="b in deficitRef" :key="b.label" class="deficit-pop-row">
                 <span class="deficit-pop-range" :style="{ color: toneColor(b.tone) }">{{ b.range }}</span>
                 <span class="deficit-pop-label">{{ b.label }}</span>
@@ -126,6 +150,22 @@
                 <span>体重</span>
                 <strong v-if="summary.body && summary.body.weight">{{ fmt(summary.body.weight, 1) }} kg</strong>
                 <strong v-else class="muted">未记录</strong>
+              </div>
+              <div class="stat-row" v-if="todayBurn">
+                <span>{{ measuredFromPast ? '今日消耗（估算）' : '手表实测消耗' }}</span>
+                <strong>{{ fmt(todayBurn, 0) }} kcal<span class="dim" v-if="measuredFromPast"> · 按已走 {{ fmt(summary.body && summary.body.steps, 0) }} 步估算</span></strong>
+              </div>
+              <div class="stat-row" v-if="summary.body && summary.body.sleep_hours">
+                <span>睡眠</span>
+                <strong>{{ fmt(summary.body.sleep_hours, 1) }} h<span class="dim" v-if="summary.body.sleep_score"> · 评分 {{ fmt(summary.body.sleep_score, 0) }}</span></strong>
+              </div>
+              <div class="stat-row" v-if="summary.body && summary.body.resting_hr">
+                <span>静息心率</span>
+                <strong>{{ fmt(summary.body.resting_hr, 0) }} bpm<span class="dim" v-if="summary.body.stress_avg"> · 压力 {{ fmt(summary.body.stress_avg, 0) }}</span></strong>
+              </div>
+              <div class="stat-row" v-if="summary.body && summary.body.steps">
+                <span>步数</span>
+                <strong>{{ fmt(summary.body.steps, 0) }}</strong>
               </div>
             </div>
           </div>
@@ -181,47 +221,116 @@
       <!-- 饮食记录 -->
       <section v-else-if="view === 'diet'" class="page">
         <div class="card">
-        <div class="card-title">
-          粘贴识图结果
-          <button class="link-btn" @click="copyPrompt">复制识图提示词</button>
-        </div>
-        <p class="hint">
-          把按模板输出的文本整段贴进来，本地规则直接解析，不消耗 LLM 额度。
-        </p>
-          <textarea v-model="pasteText" rows="6" class="textarea"
-                    placeholder="###&#10;餐次: 午餐&#10;食物: 米饭&#10;分量: 150g&#10;卡路里: 174&#10;蛋白质: 3.5&#10;脂肪: 0.4&#10;碳水: 38.5&#10;###"></textarea>
-          <div class="btn-row">
-            <button class="primary-btn" :disabled="!pasteText.trim() || busy" @click="importPaste">解析并记录</button>
-            <button class="ghost-btn" :disabled="!pasteText.trim() || busy" @click="previewPaste">先预览</button>
-            <button class="ghost-btn" v-if="pasteText" @click="pasteText = ''; parsePreview = null">清空</button>
+          <div class="entry-tabs">
+            <button v-for="tab in dietTabs" :key="tab.key"
+                    class="entry-tab" :class="{ active: dietEntry === tab.key }"
+                    @click="dietEntry = tab.key">
+              {{ tab.label }}
+              <span class="entry-dot" v-if="tab.key === 'image' && mealPendingCount"></span>
+            </button>
           </div>
-          <div v-if="parsePreview" class="preview">
-            <div class="preview-title">解析结果</div>
-            <div v-for="(rows, type) in previewGroups" :key="type" class="preview-group">
-              <div class="preview-type">{{ meta.record_types[type] }} {{ rows.length }} 条</div>
-              <div v-for="(row, i) in rows" :key="i" class="preview-row">{{ describePreview(type, row) }}</div>
-            </div>
-            <div v-for="(w, i) in parsePreview.warnings" :key="'w' + i" class="preview-warn">{{ w }}</div>
-          </div>
-        </div>
 
-        <div class="card">
-          <div class="card-title">手动添加</div>
-          <div class="form-grid">
-            <label>餐次
-              <select v-model="dietForm.meal_type">
-                <option v-for="m in meals" :key="m" :value="m">{{ m }}</option>
-              </select>
+          <div v-if="dietEntry === 'image'" class="entry-pane">
+            <div class="notice" v-if="meta.vision && !meta.vision.own_key">
+              <strong>还没单独配置视觉模型</strong>
+              <span>
+                现在会拿 <code>{{ (meta.vision && meta.vision.model) || 'LLM_MODEL' }}</code>
+                去认图，但它只有文本能力，认不了。去 .env 补上
+                <code>VISION_API_KEY</code> / <code>VISION_BASE_URL</code> /
+                <code>VISION_MODEL</code>，填一个多模态模型（如 SiliconFlow 的
+                Qwen2.5-VL），改完重启服务即可。
+              </span>
+              <span>上传、图库、删除这些现在就能用。</span>
+            </div>
+
+            <label class="drop-zone" :class="{ dragging: mealDrag, busy: mealUploading }"
+                   @dragover.prevent="mealDrag = true"
+                   @dragleave.prevent="mealDrag = false"
+                   @drop.prevent="onMealDrop">
+              <input type="file" accept="image/*" multiple hidden @change="onMealPick">
+              <span class="drop-icon"></span>
+              <span class="drop-main" v-if="mealUploading">正在上传…</span>
+              <span class="drop-main" v-else>点这里选照片，或直接把图片拖进来</span>
+              <span class="drop-sub">支持一次多张；上传后自动压缩，原图不会上传</span>
             </label>
-            <label>食物<input v-model="dietForm.food_name" placeholder="鸡胸肉"></label>
-            <label>分量<input v-model="dietForm.amount" placeholder="150g"></label>
-            <label>卡路里<input v-model="dietForm.calories" type="number" step="1"></label>
-            <label>蛋白质 g<input v-model="dietForm.protein" type="number" step="0.1"></label>
-            <label>脂肪 g<input v-model="dietForm.fat" type="number" step="0.1"></label>
-            <label>碳水 g<input v-model="dietForm.carbs" type="number" step="0.1"></label>
+
+            <div v-if="mealImages.length" class="meal-grid">
+              <div v-for="img in mealImages" :key="img.id"
+                   class="meal-thumb" :class="'st-' + img.status">
+                <img :src="'/api/meals/' + img.id + '/image'" loading="lazy" alt="">
+                <span class="meal-badge">{{ mealStatusText(img.status) }}</span>
+                <button class="meal-del" title="删除这张" @click="deleteMealImage(img.id)">×</button>
+              </div>
+            </div>
+            <div v-else class="empty">还没有上传图片</div>
+
+            <div class="btn-row">
+              <button class="primary-btn" :disabled="mealBusy || !mealImages.length" @click="analyzeMeals">
+                {{ mealAnalyzing ? '识别中…' : (mealPendingCount ? '识别 ' + mealPendingCount + ' 张待处理' : '识别图片') }}
+              </button>
+              <button class="ghost-btn" v-if="mealErrors.length" @click="mealErrors = []">清掉错误</button>
+            </div>
+
+            <div v-for="(e, i) in mealErrors" :key="'e' + i" class="preview-warn">{{ e }}</div>
+
+            <div v-if="mealPreview" class="preview">
+              <div class="preview-title">
+                识别结果
+                <span class="dim">确认后写入 {{ mealPreviewDate }}</span>
+              </div>
+              <div v-for="(rows, type) in mealPreviewGroups" :key="type" class="preview-group">
+                <div class="preview-type">{{ meta.record_types[type] }} {{ rows.length }} 条</div>
+                <div v-for="(row, i) in rows" :key="i" class="preview-row">{{ describePreview(type, row) }}</div>
+              </div>
+              <div v-for="(w, i) in mealPreview.warnings" :key="'mw' + i" class="preview-warn">{{ w }}</div>
+              <div class="btn-row">
+                <button class="primary-btn" :disabled="busy || !mealPreviewTotal" @click="commitMealPreview">
+                  确认入库 {{ mealPreviewTotal }} 条
+                </button>
+                <button class="ghost-btn" @click="mealPreview = null">放弃</button>
+              </div>
+            </div>
           </div>
-          <div class="btn-row">
-            <button class="primary-btn" :disabled="!dietForm.food_name || busy" @click="submitForm('diet')">添加</button>
+
+          <div v-else-if="dietEntry === 'paste'" class="entry-pane">
+            <div class="entry-head">
+              <span class="hint">把按模板输出的文本整段贴进来，本地规则直接解析，不消耗 LLM 额度。</span>
+              <button class="link-btn" @click="copyPrompt">复制识图提示词</button>
+            </div>
+            <textarea v-model="pasteText" rows="6" class="textarea"
+                      placeholder="###&#10;餐次: 午餐&#10;食物: 米饭&#10;分量: 150g&#10;卡路里: 174&#10;蛋白质: 3.5&#10;脂肪: 0.4&#10;碳水: 38.5&#10;###"></textarea>
+            <div class="btn-row">
+              <button class="primary-btn" :disabled="!pasteText.trim() || busy" @click="importPaste">解析并记录</button>
+              <button class="ghost-btn" :disabled="!pasteText.trim() || busy" @click="previewPaste">先预览</button>
+              <button class="ghost-btn" v-if="pasteText" @click="pasteText = ''; parsePreview = null">清空</button>
+            </div>
+            <div v-if="parsePreview" class="preview">
+              <div class="preview-title">解析结果</div>
+              <div v-for="(rows, type) in previewGroups" :key="type" class="preview-group">
+                <div class="preview-type">{{ meta.record_types[type] }} {{ rows.length }} 条</div>
+                <div v-for="(row, i) in rows" :key="i" class="preview-row">{{ describePreview(type, row) }}</div>
+              </div>
+              <div v-for="(w, i) in parsePreview.warnings" :key="'w' + i" class="preview-warn">{{ w }}</div>
+            </div>
+          </div>
+
+          <div v-else class="entry-pane">
+            <div class="form-grid">
+              <label>餐次
+                <select v-model="dietForm.meal_type">
+                  <option v-for="m in meals" :key="m" :value="m">{{ m }}</option>
+                </select>
+              </label>
+              <label>食物<input v-model="dietForm.food_name" placeholder="鸡胸肉"></label>
+              <label>分量<input v-model="dietForm.amount" placeholder="150g"></label>
+              <label>卡路里<input v-model="dietForm.calories" type="number" step="1"></label>
+              <label>蛋白质 g<input v-model="dietForm.protein" type="number" step="0.1"></label>
+              <label>脂肪 g<input v-model="dietForm.fat" type="number" step="0.1"></label>
+              <label>碳水 g<input v-model="dietForm.carbs" type="number" step="0.1"></label>
+            </div>
+            <div class="btn-row">
+              <button class="primary-btn" :disabled="!dietForm.food_name || busy" @click="submitForm('diet')">添加</button>
+            </div>
           </div>
         </div>
 
@@ -274,6 +383,38 @@
 
       <!-- 训练记录 -->
       <section v-else-if="view === 'workout'" class="page">
+        <div class="card" v-if="garminStatus && garminStatus.configured">
+          <div class="card-title">
+            ⌚ 手表全天消耗（{{ summary.date }}）
+            <span class="dim" v-if="garminStatus.last_sync">上次同步 {{ garminStatus.last_sync.date }}</span>
+          </div>
+          <div class="card-sub" v-if="summary.body && summary.body.calories_burned">
+            手表把当天从睁眼到现在的全部消耗算在一起：基础代谢 + 走路 + 训练。
+            白天数值会一直往上爬，晚上才接近全天真实消耗，所以热量目标取的是「最近一次完整实测」。
+          </div>
+          <div class="stat-rows" v-if="summary.body && summary.body.calories_burned">
+            <div class="stat-row">
+              <span>当日累计消耗</span>
+              <strong>{{ fmt(summary.body.calories_burned, 0) }} kcal</strong>
+            </div>
+            <div class="stat-row" v-if="summary.body.steps">
+              <span>其中步数</span>
+              <strong>{{ fmt(summary.body.steps, 0) }}</strong>
+            </div>
+            <div class="stat-row" v-if="measuredBurn">
+              <span>最近一次完整实测</span>
+              <strong>{{ fmt(measuredBurn, 0) }} kcal<span class="dim"> · {{ summary.tdee_measured_date }}</span></strong>
+            </div>
+            <div class="stat-row" v-if="summary.tdee">
+              <span>公式 TDEE</span>
+              <strong class="dim">{{ fmt(summary.tdee, 0) }} kcal</strong>
+            </div>
+          </div>
+          <div class="btn-row">
+            <button class="primary-btn" :disabled="garminBusy" @click="garminSync">{{ garminBusy ? '同步中…' : '同步最近 7 天' }}</button>
+          </div>
+        </div>
+
         <div class="card">
           <div class="card-title">添加训练</div>
           <p class="hint">最简结构：部位、时长、消耗。也可以直接在右侧对话栏说「今天练胸 40min 消耗 300kcal」。</p>
@@ -334,6 +475,38 @@
 
       <!-- 身体数据 -->
       <section v-else-if="view === 'body'" class="page">
+        <div class="card" v-if="garminStatus && garminStatus.configured && summary.body && (summary.body.sleep_hours || summary.body.resting_hr || summary.body.steps)">
+          <div class="card-title">
+            ⌚ 手表身体指标（{{ summary.date }}）
+            <span class="dim" v-if="garminStatus.last_sync">上次同步 {{ garminStatus.last_sync.date }}</span>
+          </div>
+          <div class="stat-rows">
+            <div class="stat-row" v-if="summary.body.sleep_hours">
+              <span>睡眠</span>
+              <strong>{{ fmt(summary.body.sleep_hours, 1) }} h · 评分 {{ fmt(summary.body.sleep_score, 0) || '—' }}</strong>
+            </div>
+            <div class="stat-row" v-if="summary.body.deep_sleep_min || summary.body.rem_sleep_min">
+              <span>深睡 / REM</span>
+              <strong>{{ fmt(summary.body.deep_sleep_min, 0) || '—' }} / {{ fmt(summary.body.rem_sleep_min, 0) || '—' }} min</strong>
+            </div>
+            <div class="stat-row" v-if="summary.body.resting_hr">
+              <span>静息心率</span>
+              <strong>{{ fmt(summary.body.resting_hr, 0) }} bpm</strong>
+            </div>
+            <div class="stat-row" v-if="summary.body.stress_avg">
+              <span>平均压力</span>
+              <strong>{{ fmt(summary.body.stress_avg, 0) }}</strong>
+            </div>
+            <div class="stat-row" v-if="summary.body.steps">
+              <span>步数</span>
+              <strong>{{ fmt(summary.body.steps, 0) }}</strong>
+            </div>
+          </div>
+          <div class="btn-row">
+            <button class="primary-btn" :disabled="garminBusy" @click="garminSync">{{ garminBusy ? '同步中…' : '同步最近 7 天' }}</button>
+          </div>
+        </div>
+
         <div class="card">
           <div class="card-title">记录身体数据</div>
           <div class="form-grid">
@@ -356,10 +529,13 @@
         </div>
 
         <div class="card">
-          <div class="card-title">历史记录</div>
+          <div class="card-title">
+            历史记录
+            <span class="dim">⌚ = 佳明同步，其余为手动记录</span>
+          </div>
           <div v-if="!bodyHistory.length" class="empty">还没有身体数据</div>
           <table v-else class="table">
-            <thead><tr><th>日期</th><th class="num">体重 kg</th><th class="num">体脂 %</th><th class="num">腰围 cm</th><th></th></tr></thead>
+            <thead><tr><th>日期</th><th class="num">体重 kg</th><th class="num">体脂 %</th><th class="num">腰围 cm</th><th class="num">睡眠 h</th><th class="num">步数</th><th></th></tr></thead>
             <tbody>
               <tr v-for="row in bodyHistory" :key="row.id">
                 <template v-if="isEditing('body', row.id)">
@@ -367,16 +543,20 @@
                   <td class="num"><input v-model="editing.draft.weight" type="number" step="0.1" class="mini-input num"></td>
                   <td class="num"><input v-model="editing.draft.body_fat" type="number" step="0.1" class="mini-input num"></td>
                   <td class="num"><input v-model="editing.draft.waist" type="number" step="0.1" class="mini-input num"></td>
+                  <td class="num"></td>
+                  <td class="num"></td>
                   <td class="row-actions">
                     <button class="ok-btn" :disabled="busy" @click="saveEdit('body')">保存</button>
                     <button class="ghost-btn" @click="cancelEdit">取消</button>
                   </td>
                 </template>
                 <template v-else>
-                  <td>{{ row.date }}</td>
+                  <td>{{ row.date }}<span class="dim" v-if="row.source === 'garmin'"> ⌚</span></td>
                   <td class="num">{{ fmt(row.weight, 1) }}</td>
                   <td class="num dim">{{ fmt(row.body_fat, 1) }}</td>
                   <td class="num dim">{{ fmt(row.waist, 1) }}</td>
+                  <td class="num dim">{{ row.sleep_hours ? fmt(row.sleep_hours, 1) : '—' }}</td>
+                  <td class="num dim">{{ row.steps ? fmt(row.steps, 0) : '—' }}</td>
                   <td class="row-actions">
                     <button class="edit-btn" @click="startEdit('body', row)">编辑</button>
                     <button class="del-btn" @click="removeRecord('body', row)">删除</button>
@@ -422,6 +602,26 @@
         <div class="card chart-card">
           <div class="card-title">体重变化</div>
           <div class="chart-wrap"><canvas ref="weightChart"></canvas></div>
+        </div>
+      </section>
+
+      <!-- AI 日报 -->
+      <section v-else-if="view === 'reports'" class="page">
+        <div class="card">
+          <div class="card-title">
+            AI 日报
+            <span class="dim" v-if="reportCurrent">{{ reportCurrent.model ? '模型 ' + reportCurrent.model : '本地模板（AI 未生成）' }}</span>
+          </div>
+          <div class="btn-row">
+            <button class="primary-btn" :disabled="reportBusy" @click="generateReport">{{ reportBusy ? '生成中…' : '生成所选日期日报' }}</button>
+          </div>
+          <div class="range-tabs" v-if="reportsList.length">
+            <button v-for="r in reportsList" :key="r.date"
+                    :class="{ on: reportCurrent && reportCurrent.date === r.date }"
+                    @click="openReport(r.date)">{{ r.date }}</button>
+          </div>
+          <div v-if="!reportCurrent && !reportBusy" class="empty">还没有日报。选择日期后点「生成」。</div>
+          <div class="report-body" v-if="reportCurrent" v-html="reportCurrent.html"></div>
         </div>
       </section>
 
@@ -586,6 +786,7 @@
   <div class="toast" v-if="toast" :class="toast.tone">{{ toast.text }}</div>
 </div>
 
+<!-- 本地脚本带版本戳：改完前端直接刷新就能生效，不会被浏览器旧缓存挡住 -->
 <script src="/vendor/vue.global.prod.js"></script>
 <script>
 if (!window.Vue) {
@@ -598,6 +799,15 @@ if (!window.Chart) {
   document.write('<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"><\/script>');
 }
 </script>
-<script src="/js/app.js"></script>
+<script src="/js/app.js?v=20261012e"></script>
+<script>
+  // 注册 Service Worker，让 Chrome 能把它装成独立应用。
+  // 只在安全上下文注册：局域网 http 下浏览器本来就不允许，也没必要。
+  if ("serviceWorker" in navigator &&
+      (location.protocol === "https:" || location.hostname === "localhost" ||
+       location.hostname === "127.0.0.1")) {
+    navigator.serviceWorker.register("/sw.js").catch(function () {});
+  }
+</script>
 </body>
 </html>

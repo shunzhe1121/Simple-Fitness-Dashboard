@@ -119,10 +119,27 @@ CREATE TABLE IF NOT EXISTS chat_messages (
     created_at  TEXT    NOT NULL
 );
 
+-- 待识别的餐食图片。平时拍照攒着，等电脑开着时一次性上传识别，
+-- 识别出的文本仍走 parser 解析，与「粘贴识图结果」共用同一条链路。
+CREATE TABLE IF NOT EXISTS meal_images (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    date        TEXT    NOT NULL,
+    original    TEXT,
+    stored_name TEXT    NOT NULL,
+    mime        TEXT,
+    status      TEXT    NOT NULL DEFAULT 'pending',
+    result_text TEXT,
+    error       TEXT,
+    record_ids  TEXT,
+    created_at  TEXT    NOT NULL,
+    deleted_at  TEXT
+);
+
 CREATE INDEX IF NOT EXISTS idx_diet_date    ON diet_records (date);
 CREATE INDEX IF NOT EXISTS idx_workout_date ON workout_records (date);
 CREATE INDEX IF NOT EXISTS idx_body_date    ON body_records (date);
 CREATE INDEX IF NOT EXISTS idx_chat_created ON chat_messages (created_at);
+CREATE INDEX IF NOT EXISTS idx_meal_images_date ON meal_images (date);
 """
 
 

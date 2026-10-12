@@ -39,6 +39,7 @@
     { key: "workout", label: "训练记录", color: "#ef4444" },
     { key: "body", label: "身体数据", color: "#10b981" },
     { key: "stats", label: "统计分析", color: "#8b5cf6" },
+    { key: "reports", label: "AI 日报", color: "#06b6d4" },
     { key: "settings", label: "设置", color: "#6b7280" },
   ];
 
@@ -70,6 +71,9 @@
     workout: { total: { duration_min: 0, calories: 0, count: 0 }, records: [] },
     body: null,
     goals: {},
+    target_calories: null,
+    tdee: null,
+    deficit_band: null,
   };
 
   const { createApp } = Vue;
@@ -115,6 +119,20 @@
         pasteText: "",
         parsePreview: null,
 
+        // 饮食录入方式：图片分析 / 粘贴文本 / 手动添加
+        dietEntry: "image",
+        dietTabs: [
+          { key: "image", label: "图片分析" },
+          { key: "paste", label: "粘贴文本结果" },
+          { key: "manual", label: "手动添加" },
+        ],
+        mealImages: [],
+        mealUploading: false,
+        mealAnalyzing: false,
+        mealDrag: false,
+        mealPreview: null,
+        mealErrors: [],
+
         // 回收站
         trash: {},
         trashLoaded: false,
@@ -124,6 +142,13 @@
         chatInput: "",
         chatBusy: false,
         pending: [],
+
+        // AI 日报与佳明
+        reportsList: [],
+        reportCurrent: null,
+        reportBusy: false,
+        garminStatus: null,
+        garminBusy: false,
 
         // 杂项
         toast: null,
@@ -155,13 +180,30 @@
       goalCalories() {
         return this.goals && this.goals.daily_calories ? this.goals.daily_calories : null;
       },
-      // 有效目标 = 基础目标 + 当日训练消耗。训练烧掉的热量算进当天预算，
-      // 环、状态提示、净摄入对比都用它，避免「练了 250 千卡却被判超出目标」。
+      // 有效目标：后端已按「最近一次手表实测消耗」动态调整（有佳明数据时优先），
+      // 无手表数据时回退 基础目标 + 当日训练消耗 的公式口径。
       effectiveGoal() {
+        const backend = this.summary.target_calories;
+        if (backend) return Math.round(backend);
         const base = this.goalCalories;
         if (!base) return null;
         const workout = (this.summary.workout.total.calories || 0);
         return Math.round(base + workout);
+      },
+      // 手表实测总消耗：今天的还没同步完，取最近一次完整实测值
+      measuredBurn() {
+        return this.summary.tdee_measured || null;
+      },
+      // 实测值是否来自昨天等历史日期（今天的总消耗要等一天过完才完整）
+      measuredFromPast() {
+        return !!this.measuredBurn && !this.summary.is_measured_today;
+      },
+      // 当天实时消耗：手表同步过就用实测，否则按「静息 + 已走步数」估算
+      todayBurn() {
+        return this.summary.today_burn || null;
+      },
+      burnIsEstimated() {
+        return !!this.summary.today_burn_estimated;
       },
       workoutBonus() {
         const w = this.summary.workout.total.calories || 0;
@@ -229,6 +271,30 @@
         }
         return out;
       },
+      // 图片识别结果的分组展示，结构与「粘贴文本」的解析预览一致
+      mealPreviewGroups() {
+        if (!this.mealPreview) return {};
+        const out = {};
+        for (const type of ["diet", "workout", "body"]) {
+          const rows = this.mealPreview[type];
+          if (rows && rows.length) out[type] = rows;
+        }
+        return out;
+      },
+      mealPreviewTotal() {
+        const p = this.mealPreview;
+        if (!p) return 0;
+        return ["diet", "workout", "body"].reduce(
+          (sum, type) => sum + ((p[type] || []).length), 0
+        );
+      },
+      // 没入库的都算待处理：待识别、识别过但没确认、上次失败的
+      mealPendingCount() {
+        return this.mealImages.filter((img) => img.status !== "imported").length;
+      },
+      mealBusy() {
+        return this.mealUploading || this.mealAnalyzing;
+      },
       kpis() {
         const s = this.statsData;
         if (!s) return [];
@@ -262,11 +328,13 @@
         return this.summary.deficit_band;
       },
       deficitDisplay() {
-        // 统一用有效目标口径，与热量环一致：缺口 = 有效目标 − 饮食摄入
-        const goal = this.effectiveGoal;
-        const intake = this.summary.diet.total.calories || 0;
-        if (goal == null) return "—";
-        const d = goal - intake;
+        // 与后端缺口口径一致：基准消耗（当天实时/最近实测/公式TDEE）− 净摄入
+        const burn = this.todayBurn || this.measuredBurn || this.summary.tdee;
+        const s = this.summary;
+        const intake = s.diet.total.calories || 0;
+        const net = this.measuredBurn ? intake : intake - (s.workout.total.calories || 0);
+        if (!burn) return "—";
+        const d = burn - net;
         return (d >= 0 ? "缺口 " : "盈余 ") + this.fmt(Math.abs(d), 0) + " kcal";
       },
       deficitColor() {
@@ -420,13 +488,72 @@
       },
       onEnterView(key) {
         if (key === "today") this.loadToday();
-        else if (key === "diet") this.loadRecords("diet");
-        else if (key === "workout") this.loadRecords("workout");
-        else if (key === "body") {
+        else if (key === "diet") {
+          this.loadRecords("diet");
+          this.loadMealImages();
+        }
+        else if (key === "workout") {
+          this.loadRecords("workout");
+          // 全天消耗跟着当天数据走，训练页顶部要显示手表的累计消耗
+          this.loadToday();
+          this.loadGarminStatus();
+        } else if (key === "body") {
           this.loadBodyHistory();
           this.loadBodyTrend();
+          this.loadToday();
+          this.loadGarminStatus();
         } else if (key === "stats") this.loadStats();
+        else if (key === "reports") this.loadReports();
         else if (key === "settings") this.loadSettings();
+      },
+
+      // ---------------------------------------------------------- AI 日报 / 佳明
+      async loadReports() {
+        const data = await this.api("/api/reports");
+        this.reportsList = data.reports || [];
+        if (this.reportsList.length) this.openReport(this.reportsList[0].date);
+      },
+      async openReport(date) {
+        this.reportBusy = true;
+        try {
+          const data = await this.api(`/api/reports/${date}?html=true`);
+          this.reportCurrent = data.report;
+        } finally {
+          this.reportBusy = false;
+        }
+      },
+      async generateReport() {
+        this.reportBusy = true;
+        try {
+          await this.api("/api/reports/generate", {
+            date: this.selectedDate,
+            force: true,
+          });
+          await this.loadReports();
+          this.notify({ text: "日报已生成" });
+        } finally {
+          this.reportBusy = false;
+        }
+      },
+      async loadGarminStatus() {
+        try {
+          this.garminStatus = await this.api("/api/garmin/status");
+        } catch (e) {
+          this.garminStatus = { configured: false };
+        }
+      },
+      async garminSync() {
+        this.garminBusy = true;
+        try {
+          const res = await this.api("/api/garmin/sync", { days: 7 });
+          const weighIns = (res && res.weights) ? Object.keys(res.weights).length : 0;
+          this.notify({
+            text: weighIns ? `佳明数据已同步（含 ${weighIns} 天体重）` : "佳明数据已同步",
+          });
+          await Promise.all([this.loadGarminStatus(), this.loadToday(), this.loadBodyHistory()]);
+        } finally {
+          this.garminBusy = false;
+        }
       },
       onDateChange() {
         if (this.view === "today") this.loadToday();
@@ -659,6 +786,135 @@
           await this.refreshData();
         } catch (e) {
           this.notify({ text: "导入失败：" + e.message, tone: "error" });
+        } finally {
+          this.busy = false;
+        }
+      },
+      // ---- 图片分析：上传 → 识别 → 确认入库 ----
+
+      mealStatusText(status) {
+        return {
+          pending: "待识别",
+          analyzed: "已识别",
+          imported: "已入库",
+          failed: "识别失败",
+        }[status] || status;
+      },
+      async loadMealImages() {
+        try {
+          const data = await this.api(
+            "/api/meals?date=" + encodeURIComponent(this.selectedDate)
+          );
+          this.mealImages = data.images || [];
+        } catch (e) {
+          this.notify({ text: "加载图片失败：" + e.message, tone: "error" });
+        }
+      },
+      onMealPick(event) {
+        const files = Array.from(event.target.files || []);
+        // 清空 value，否则连选同一张照片不会再触发 change
+        event.target.value = "";
+        this.uploadMealFiles(files);
+      },
+      onMealDrop(event) {
+        this.mealDrag = false;
+        this.uploadMealFiles(Array.from(event.dataTransfer.files || []));
+      },
+      async uploadMealFiles(files) {
+        const images = files.filter((f) => (f.type || "").startsWith("image/"));
+        if (!images.length) {
+          this.notify({ text: "没有可上传的图片", tone: "error" });
+          return;
+        }
+        this.mealUploading = true;
+        try {
+          const form = new FormData();
+          images.forEach((file) => form.append("files", file));
+          form.append("date", this.selectedDate);
+          const res = await fetch("/api/meals/upload", { method: "POST", body: form });
+          const data = await res.json().catch(() => null);
+          if (!res.ok) {
+            throw new Error((data && (data.detail || data.error)) || "HTTP " + res.status);
+          }
+          const ok = (data.saved || []).length;
+          const bad = (data.failed || []).length;
+          this.mealErrors = (data.failed || []).map((f) => f.name + "：" + f.error);
+          this.notify({
+            text: bad ? `已上传 ${ok} 张，${bad} 张失败` : `已上传 ${ok} 张`,
+            tone: bad ? "error" : "ok",
+          });
+          await this.loadMealImages();
+        } catch (e) {
+          this.notify({ text: "上传失败：" + e.message, tone: "error" });
+        } finally {
+          this.mealUploading = false;
+        }
+      },
+      async deleteMealImage(id) {
+        try {
+          await this.api("/api/meals/" + id, null, "DELETE");
+          this.mealImages = this.mealImages.filter((img) => img.id !== id);
+        } catch (e) {
+          this.notify({ text: "删除失败：" + e.message, tone: "error" });
+        }
+      },
+      async analyzeMeals() {
+        this.mealAnalyzing = true;
+        this.mealErrors = [];
+        try {
+          const res = await this.api(
+            "/api/meals/analyze",
+            { date: this.selectedDate },
+            "POST"
+          );
+          this.mealErrors = (res.analyzed || [])
+            .filter((item) => !item.ok)
+            .map((item) => (item.original || "图片") + "：" + item.error);
+          if (res.parsed) {
+            this.mealPreview = res.parsed;
+            const total = ["diet", "workout", "body"].reduce(
+              (sum, type) => sum + ((res.parsed[type] || []).length),
+              0
+            );
+            this.notify({
+              text: total ? `识别出 ${total} 条，确认后入库` : "没能识别出记录",
+              tone: total ? "ok" : "error",
+            });
+          } else {
+            this.mealPreview = null;
+            this.notify({ text: "没有识别到内容", tone: "error" });
+          }
+          await this.loadMealImages();
+        } catch (e) {
+          this.notify({ text: "识别失败：" + e.message, tone: "error" });
+        } finally {
+          this.mealAnalyzing = false;
+        }
+      },
+      async commitMealPreview() {
+        if (!this.mealPreview) return;
+        this.busy = true;
+        try {
+          let saved = 0;
+          for (const type of ["diet", "workout", "body"]) {
+            const rows = this.mealPreview[type] || [];
+            if (!rows.length) continue;
+            const res = await this.api("/api/records/" + type, { records: rows }, "POST");
+            saved += (res.records || []).length || rows.length;
+          }
+          // 把这批图片标成已入库，否则它们会一直被当成待处理
+          const ids = this.mealImages
+            .filter((img) => img.status !== "imported")
+            .map((img) => img.id);
+          if (ids.length) {
+            await this.api("/api/meals/mark-imported", { ids }, "POST");
+          }
+          this.mealPreview = null;
+          this.notify({ text: "已入库 " + saved + " 条", tone: "ok" });
+          await this.refreshData();
+          await this.loadMealImages();
+        } catch (e) {
+          this.notify({ text: "入库失败：" + e.message, tone: "error" });
         } finally {
           this.busy = false;
         }

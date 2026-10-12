@@ -11,9 +11,15 @@ import io
 import json
 from typing import Any, Optional
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    JSONResponse,
+    RedirectResponse,
+    Response,
+)
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -32,9 +38,88 @@ app.add_middleware(
 )
 
 
+# 未授权时的入口页：给一个输入框，填一次令牌即可，手机上也用得顺手
+_UNAUTHORIZED_PAGE = """<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>需要访问令牌</title>
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    background: #f5f5f4; color: #1c1c1b;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  .box { width: 100%; max-width: 340px; padding: 28px 24px; }
+  h1 { font-size: 17px; font-weight: 600; margin: 0 0 10px; }
+  p { font-size: 13px; line-height: 1.7; color: #6b6a66; margin: 0 0 20px; }
+  input {
+    width: 100%; box-sizing: border-box; padding: 12px 14px; font-size: 15px;
+    border: 1px solid #d6d3cd; border-radius: 10px; background: #fff; color: inherit;
+    margin-bottom: 12px;
+  }
+  button {
+    width: 100%; padding: 13px; font-size: 15px; font-weight: 500; color: #fff;
+    background: #1c1c1b; border: 0; border-radius: 10px; cursor: pointer;
+  }
+  button:active { opacity: .85; }
+  @media (prefers-color-scheme: dark) {
+    body { background: #1a1a19; color: #f0efec; }
+    p { color: #9d9b96; }
+    input { background: #262624; border-color: #3a3a37; }
+    button { background: #f0efec; color: #1a1a19; }
+  }
+</style>
+</head>
+<body>
+  <div class="box">
+    <h1>需要访问令牌</h1>
+    <p>这个服务只对本人开放。输入访问令牌后即可进入，令牌保存在电脑的 .env 文件里（ACCESS_TOKEN 那一行）。</p>
+    <form method="get" action="/">
+      <input name="k" type="password" placeholder="访问令牌" autocomplete="off" autofocus>
+      <button type="submit">进入</button>
+    </form>
+  </div>
+</body>
+</html>"""
+
+
+@app.middleware("http")
+async def access_guard(request: Request, call_next):
+    """访问校验。
+
+    没有域名时走 Cloudflare 临时域名，服务等于直接挂在公网上，
+    令牌是唯一凭据：带 ?k=令牌 首次进入后种下 cookie，之后凭 cookie 放行。
+    重定向用相对路径，避免 Cloudflare 终结 TLS 后 scheme 判断出错。
+    """
+    if not config.access_enabled():
+        return await call_next(request)
+
+    token = config.ACCESS_TOKEN
+    if request.cookies.get(config.COOKIE_NAME) == token:
+        return await call_next(request)
+
+    if request.query_params.get("k") == token:
+        # 不设 secure：局域网用 http 访问时也要能用；传输段另有 Cloudflare 的 TLS
+        response = RedirectResponse(url=request.url.path, status_code=303)
+        response.set_cookie(
+            config.COOKIE_NAME,
+            token,
+            max_age=config.COOKIE_MAX_AGE,
+            httponly=True,
+            samesite="lax",
+        )
+        return response
+
+    return HTMLResponse(_UNAUTHORIZED_PAGE, status_code=401)
+
+
 @app.on_event("startup")
 def on_startup() -> None:
-    """启动时建表，并清理超期的对话历史。"""
+    """启动时建表，清理超期对话历史，并确保访问令牌存在。"""
+    config.ensure_access_token()
     db.init_db()
     repository.prune_chat_messages(config.CHAT_HISTORY_DAYS)
 
@@ -95,6 +180,11 @@ def get_meta() -> dict:
     return {
         "today": utils.today_str(),
         "llm": config.llm_status(),
+        "vision": config.vision_status(),
+        "access": {
+            "enabled": config.access_enabled(),
+            "token": config.ACCESS_TOKEN,
+        },
         "options": nutrition.options(),
         "record_types": {
             key: value["label"] for key, value in repository.RECORD_TYPES.items()
@@ -297,6 +387,154 @@ def parse_import(payload: ParsePayload) -> dict:
         "warnings": parsed["warnings"],
         "unparsed": parsed["unparsed"],
     }
+
+
+# ---------------------------------------------------------------- 拍照识餐
+# 平时拍照攒着，等电脑开着时一次性上传识别。识别出来的文本与「粘贴识图结果」
+# 走同一个 parser，所以前端拿到的 parsed 结构与 /api/parse/preview 完全一致。
+
+
+class MealAnalyzePayload(BaseModel):
+    ids: Optional[list[int]] = None
+    date: Optional[str] = None
+
+
+@app.post("/api/meals/upload")
+async def meals_upload(
+    files: list[UploadFile] = File(...),
+    date: Optional[str] = Form(None),
+) -> dict:
+    """上传一张或多张餐食照片。原图压缩后落盘，单张失败不影响其余。"""
+    from . import vision
+
+    day = utils.resolve_date(date) or utils.today_str()
+    limit_bytes = config.MAX_IMAGE_MB * 1024 * 1024
+    saved: list[dict] = []
+    failed: list[dict] = []
+
+    for item in files:
+        name = item.filename or "photo.jpg"
+        try:
+            raw = await item.read()
+            if not raw:
+                failed.append({"name": name, "error": "空文件"})
+                continue
+            if len(raw) > limit_bytes:
+                failed.append(
+                    {"name": name, "error": f"超过 {config.MAX_IMAGE_MB:g} MB 上限"}
+                )
+                continue
+            stored = vision.save_image(raw, name, day)
+            row = repository.add_meal_image(
+                day, stored["stored_name"], name, stored["mime"]
+            )
+            row["bytes"] = stored["bytes"]
+            saved.append(row)
+        except vision.VisionError as error:
+            failed.append({"name": name, "error": str(error)})
+        except Exception as error:  # noqa: BLE001 — 单张失败不能拖垮整批
+            failed.append({"name": name, "error": f"保存失败：{error}"})
+
+    return {"date": day, "saved": saved, "failed": failed}
+
+
+@app.get("/api/meals")
+def list_meals(date: Optional[str] = None, limit: int = 200) -> dict:
+    """图库列表，附带识图能力的配置状态。"""
+    rows = repository.list_meal_images(day=date, limit=limit)
+    return {
+        "images": rows,
+        "count": len(rows),
+        "vision": config.vision_status(),
+    }
+
+
+@app.get("/api/meals/{meal_id}/image")
+def meal_image(meal_id: int) -> Response:
+    from . import vision
+
+    row = repository.get_meal_image(meal_id)
+    if not row:
+        raise HTTPException(404, "图片不存在")
+    path = vision.image_path(row["stored_name"])
+    if not path.exists():
+        raise HTTPException(404, "图片文件已丢失")
+    return FileResponse(path, media_type=row.get("mime") or "image/jpeg")
+
+
+@app.post("/api/meals/analyze")
+def meals_analyze(payload: MealAnalyzePayload) -> dict:
+    """识别图片并解析，只返回结果不入库——入不入库交给用户确认。
+
+    不传 ids 时取所有待识别/上次失败的图片，按拍摄顺序处理。
+    """
+    from . import vision
+
+    if payload.ids:
+        rows = [row for row in (repository.get_meal_image(i) for i in payload.ids) if row]
+    else:
+        rows = repository.list_unanalyzed_meal_images(payload.date)
+
+    if not rows:
+        return {"analyzed": [], "parsed": None, "warnings": ["没有待识别的图片"]}
+
+    outcomes: list[dict] = []
+    texts: list[str] = []
+
+    for row in rows:
+        result = vision.analyze(vision.image_path(row["stored_name"]))
+        if result["error"]:
+            repository.update_meal_image(
+                row["id"], status="failed", error=result["error"]
+            )
+            outcomes.append(
+                {"id": row["id"], "original": row.get("original"), "ok": False,
+                 "error": result["error"]}
+            )
+            continue
+        repository.update_meal_image(
+            row["id"], status="analyzed", result_text=result["text"], error=None
+        )
+        texts.append(result["text"])
+        outcomes.append(
+            {"id": row["id"], "original": row.get("original"), "ok": True,
+             "text": result["text"]}
+        )
+
+    if not texts:
+        return {
+            "analyzed": outcomes,
+            "parsed": None,
+            "warnings": ["这些图片都没能识别出内容，看下面的错误信息"],
+        }
+
+    parsed = parser.parse(vision.merge_texts(texts), default_date=payload.date)
+    return {"analyzed": outcomes, "parsed": parsed, "vision": config.vision_status()}
+
+
+class MealMarkPayload(BaseModel):
+    ids: list[int]
+
+
+@app.post("/api/meals/mark-imported")
+def meals_mark_imported(payload: MealMarkPayload) -> dict:
+    """把图片标成已入库。
+
+    前端确认入库后调用，避免同一批图片下次又被识别一遍。
+    """
+    updated = 0
+    for meal_id in payload.ids:
+        if repository.update_meal_image(meal_id, status="imported"):
+            updated += 1
+    return {"updated": updated}
+
+
+@app.delete("/api/meals/{meal_id}")
+def delete_meal(meal_id: int) -> dict:
+    count = repository.delete_meal_image(meal_id)
+    if not count:
+        raise HTTPException(404, "图片不存在")
+    return {"deleted": count}
 
 
 # ---------------------------------------------------------------- 汇总统计
