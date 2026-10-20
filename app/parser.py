@@ -119,6 +119,35 @@ _BLOCK_SPLIT = re.compile(r"#{3,}")
 _FENCE = re.compile(r"^```[a-zA-Z]*\s*|\s*```$", re.MULTILINE)
 _KEY_VALUE = re.compile(r"^\s*([^:：]{1,20})[:：]\s*(.*)$")
 
+# 汇总行判据。「早+午合计」「全天共计」这类行不是独立记录，
+# 一旦入库会让全天热量翻倍，所以在服务端直接丢弃。
+# 判据必须收紧：真实食物名里也可能出现「合计」二字（如「轻食沙拉
+# （…其余配菜合计 200g）」），按关键词搜索会误伤整条记录，
+# 所以要求汇总词在末尾、前面的修饰极短、且名称不含分量。
+_SUMMARY_WHOLE = re.compile(
+    r"^(合计|共计|总计|汇总|小结|小计|全天|一天|一日|总量|总和|total)$",
+    re.IGNORECASE,
+)
+_SUMMARY_TAIL = re.compile(r"(合计|共计|总计|汇总|小结|小计)$", re.IGNORECASE)
+_SUMMARY_HEAD = re.compile(r"^(合计|共计|总计|汇总|小结|小计)", re.IGNORECASE)
+_AMOUNT_HINT = re.compile(
+    r"\d+\s*(g|kg|ml|克|千克|毫升|个|只|片|块|碗|杯|根|颗|勺)"
+)
+
+
+def _is_summary(name: str | None) -> bool:
+    if not name:
+        return False
+    text = name.strip()
+    if _SUMMARY_WHOLE.match(text):
+        return True
+    if _SUMMARY_HEAD.match(text) and len(text) <= 10:
+        return True
+    if not _SUMMARY_TAIL.search(text):
+        return False
+    head = _SUMMARY_TAIL.sub("", text)
+    return bool(head) and len(head) <= 8 and not _AMOUNT_HINT.search(text)
+
 
 def _clean_text(text: str) -> str:
     """去掉 markdown 代码围栏和多余空白。"""
@@ -274,9 +303,16 @@ def parse(text: str, default_date: str | None = None) -> dict:
             if not record["food_name"]:
                 result["unparsed"].append(block)
                 continue
+            if _is_summary(record["food_name"]):
+                result["warnings"].append(f"已跳过汇总行：{record['food_name']}")
+                continue
             result["diet"].append(record)
         elif record_type == "workout":
-            result["workout"].append(_build_workout(fields, day))
+            record = _build_workout(fields, day)
+            if _is_summary(record["category"]):
+                result["warnings"].append(f"已跳过汇总行：{record['category']}")
+                continue
+            result["workout"].append(record)
         elif record_type == "body":
             record = _build_body(fields, day)
             if all(record[key] is None for key in ("weight", "body_fat", "waist")):
