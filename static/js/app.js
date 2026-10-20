@@ -780,7 +780,8 @@
             { text: this.pasteText, date: this.selectedDate },
             "POST"
           );
-          this.notify({ text: "已导入 " + res.count + " 条", tone: "ok" });
+          const via = res.tier === "llm" ? "（AI 兜底解析）" : "（本地规则，未耗额度）";
+          this.notify({ text: "已导入 " + res.count + " 条" + via, tone: "ok" });
           this.pasteText = "";
           this.parsePreview = null;
           await this.refreshData();

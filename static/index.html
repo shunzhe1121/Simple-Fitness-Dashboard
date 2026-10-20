@@ -13,7 +13,7 @@
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 <link rel="icon" href="/icons/icon-192.png">
-<link rel="stylesheet" href="/css/style.css?v=20261012e">
+<link rel="stylesheet" href="/css/style.css?v=20261014a">
 </head>
 <body>
 <div id="app" class="app" :data-theme="theme === 'auto' ? null : theme" v-cloak>
@@ -111,6 +111,9 @@
                 <span class="deficit-badge" :style="{ background: deficitColor }" v-if="deficitBand">{{ deficitBand.label }}</span>
                 <button class="info-btn" @click="showDeficitInfo = !showDeficitInfo" title="缺口是什么意思">?</button>
               </div>
+            </div>
+            <div class="deficit-basis" v-if="summary.tdee && summary.tdee_measured_date && summary.tdee_measured_date !== summary.date">
+              缺口按今日实时消耗 <b>{{ fmt(todayBurn, 0) }} kcal</b> 估算（全天未过完）· 目标环按 {{ summary.tdee_measured_date }} 实测 <b>{{ fmt(measuredBurn, 0) }} kcal</b>
             </div>
             <div class="deficit-pop" v-if="showDeficitInfo && summary.tdee">
               <div class="deficit-pop-title">缺口 = 当天总消耗 − 净摄入</div>
@@ -294,18 +297,22 @@
 
           <div v-else-if="dietEntry === 'paste'" class="entry-pane">
             <div class="entry-head">
-              <span class="hint">把按模板输出的文本整段贴进来，本地规则直接解析，不消耗 LLM 额度。</span>
+              <span class="hint">识图输出的文本直接整段贴进来，<b>不要求符合模板</b>。符合的走本地规则、零成本；不符合的才调 AI 兜底。</span>
               <button class="link-btn" @click="copyPrompt">复制识图提示词</button>
             </div>
             <textarea v-model="pasteText" rows="6" class="textarea"
-                      placeholder="###&#10;餐次: 午餐&#10;食物: 米饭&#10;分量: 150g&#10;卡路里: 174&#10;蛋白质: 3.5&#10;脂肪: 0.4&#10;碳水: 38.5&#10;###"></textarea>
+                      placeholder="###&#10;餐次: 午餐&#10;食物: 米饭&#10;分量: 150g&#10;卡路里: 174&#10;蛋白质: 3.5&#10;脂肪: 0.4&#10;碳水: 38.5&#10;###&#10;&#10;也可以直接贴：早餐鸡蛋火腿沙拉配贝果 465 千卡，蛋白 21.1g"></textarea>
             <div class="btn-row">
               <button class="primary-btn" :disabled="!pasteText.trim() || busy" @click="importPaste">解析并记录</button>
               <button class="ghost-btn" :disabled="!pasteText.trim() || busy" @click="previewPaste">先预览</button>
               <button class="ghost-btn" v-if="pasteText" @click="pasteText = ''; parsePreview = null">清空</button>
             </div>
             <div v-if="parsePreview" class="preview">
-              <div class="preview-title">解析结果</div>
+              <div class="preview-title">
+                解析结果
+                <span v-if="parsePreview.tier === 'llm'" class="tier-badge tier-ai">AI 兜底解析</span>
+                <span v-else class="tier-badge tier-local">本地规则 · 未消耗额度</span>
+              </div>
               <div v-for="(rows, type) in previewGroups" :key="type" class="preview-group">
                 <div class="preview-type">{{ meta.record_types[type] }} {{ rows.length }} 条</div>
                 <div v-for="(row, i) in rows" :key="i" class="preview-row">{{ describePreview(type, row) }}</div>
@@ -799,7 +806,7 @@ if (!window.Chart) {
   document.write('<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"><\/script>');
 }
 </script>
-<script src="/js/app.js?v=20261012e"></script>
+<script src="/js/app.js?v=20261014a"></script>
 <script>
   // 注册 Service Worker，让 Chrome 能把它装成独立应用。
   // 只在安全上下文注册：局域网 http 下浏览器本来就不允许，也没必要。

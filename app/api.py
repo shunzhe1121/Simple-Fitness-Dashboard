@@ -23,7 +23,7 @@ from fastapi.responses import (
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import config, db, nutrition, parser, repository, utils
+from . import config, db, freetext, nutrition, parser, repository, utils
 from .agent import graph as agent_graph
 
 app = FastAPI(title="健身记录助手", version="1.0.0")
@@ -354,14 +354,22 @@ def restore_record(record_type: str, record_id: int) -> dict:
 
 @app.post("/api/parse/preview")
 def parse_preview(payload: ParsePayload) -> dict:
-    """只解析不入库，供前端展示解析结果。"""
-    return parser.parse(payload.text, default_date=payload.date)
+    """只解析不入库，供前端展示解析结果。
+
+    走分层解析：模板文本由本地规则零成本吃掉，只有解析不出的残余片段
+    才调 LLM。返回里带 tier 字段区分走了哪一层。
+    """
+    return freetext.parse_tiered(payload.text, default_date=payload.date)
 
 
 @app.post("/api/parse/import")
 def parse_import(payload: ParsePayload) -> dict:
-    """解析粘贴文本并直接入库。走纯规则解析，不消耗 LLM 额度。"""
-    parsed = parser.parse(payload.text, default_date=payload.date)
+    """解析粘贴文本并直接入库。
+
+    与 preview 同一套分层解析：符合模板的部分不消耗 LLM 额度，
+    不符合的残余片段才交给模型结构化。
+    """
+    parsed = freetext.parse_tiered(payload.text, default_date=payload.date)
 
     saved: dict[str, list] = {}
     for record_type in ("diet", "workout", "body"):
@@ -376,16 +384,17 @@ def parse_import(payload: ParsePayload) -> dict:
 
     total = sum(len(rows) for rows in saved.values())
     if not total:
-        raise HTTPException(
-            400,
-            "没能解析出任何记录。" + "；".join(parsed["warnings"]),
-        )
+        detail = "没能解析出任何记录。" + "；".join(parsed["warnings"])
+        if parsed.get("llm_error"):
+            detail += f"（{parsed['llm_error']}）"
+        raise HTTPException(400, detail)
 
     return {
         "saved": saved,
         "count": total,
         "warnings": parsed["warnings"],
         "unparsed": parsed["unparsed"],
+        "tier": parsed.get("tier", "local"),
     }
 
 

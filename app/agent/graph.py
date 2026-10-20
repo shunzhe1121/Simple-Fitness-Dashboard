@@ -47,7 +47,28 @@ _MAX_RETRIES = 1
 
 
 class AgentUnavailable(RuntimeError):
-    """LLM 未配置时抛出，由 API 层转成前端提示。"""
+    """LLM 不可用（未配置、欠费、限流等）时抛出，由 API 层转成前端提示。"""
+
+
+# LLM 调用失败时，把厂商的错误码翻译成用户能行动的中文提示。
+# 未充值、key 失效、限流都属于「可预期错误」，不该以 500 的形式糊到用户脸上。
+_LLM_ERROR_HINTS = (
+    (402, "模型账户余额不足，去开放平台充值后即可继续对话。"),
+    (401, "API key 无效或已过期，检查 .env 里的 LLM_API_KEY。"),
+    (403, "API key 没有访问该模型的权限，换一个有权限的 key 或模型。"),
+    (429, "触发了平台的速率限制（RPM/TPM），稍等片刻再试。"),
+    (404, "模型不存在，检查 .env 里的 LLM_MODEL 是否拼错或已下线。"),
+    (400, "请求被平台拒绝（参数或模型能力不匹配），详见后面的原始信息。"),
+)
+
+
+def _explain_llm_error(error: Exception) -> str:
+    """把 LLM 调用的原始异常翻译成中文可读消息。"""
+    text = str(error)
+    for status, hint in _LLM_ERROR_HINTS:
+        if f"Error code: {status}" in text or f"code': '{status}'" in text:
+            return f"{hint}\n（原始信息：{text[:200]}）"
+    return f"对话服务出错：{text[:200]}"
 
 
 class AgentState(TypedDict):
@@ -157,13 +178,17 @@ def _system_prompt() -> str:
 - 若用户发来的是食物识别模板或明确的「记一条…」指令，先按正常流程处理记录，不必打断去建档。
 
 一、输入判断
-- 文本里含 ### 分隔和「食物: xxx」这类键值对，说明是从豆包识图复制来的模板，
-  一律调 import_pasted_template 并把原文整段传进去，不要自己拆解析。
+- 用户粘来一段话，里面是「吃了什么 + 热量/营养素」这类内容（豆包识图输出、
+  自己整理的菜单、甚至顺手打的一段描述），一律调 parse_pasted_text 并把原文
+  整段传进去。它内部先走本地规则，只有本地解析不出的残余片段才调 LLM，
+  符合模板时不花 token，所以不要自己拆文本、也不要先估算再逐条 record_diet。
 - 用户口语描述吃了什么（如「中午两个鸡蛋一碗粥」），调 record_diet。
   营养数据你按常见食物成分估算，注意是按实际分量算，不是每 100g 的值。
 - 用户描述训练（如「今天练胸 40 分钟消耗 300 卡」），调 record_workout。
   训练只记部位、时长、消耗三项。用户没说消耗就留空，不要编数字。
 - 用户报体重体脂（如「我今天 73kg」），调 record_body。
+- 「早+午合计」这类汇总行不是独立记录，让 parse_pasted_text 自己忽略，
+  不要为它单独调一次工具。
 
 - 每条新的记录指令都必须重新调用对应工具，不要因为历史里出现过类似记录就当作已经记过；
   没调用工具就绝不要说「已记录 / 已保存」，那会误导用户。
@@ -320,7 +345,13 @@ def chat(message: str, history_limit: int = 20) -> dict:
 
     for attempt in range(_MAX_RETRIES + 1):
         initial = {"messages": [*history, HumanMessage(content=text)]}
-        result = _get_graph().invoke(initial, config={"recursion_limit": RECURSION_LIMIT})
+        try:
+            result = _get_graph().invoke(initial, config={"recursion_limit": RECURSION_LIMIT})
+        except AgentUnavailable:
+            raise
+        except Exception as error:
+            # 欠费 / key 失效 / 限流等可预期错误，转成前端提示而不是 500
+            raise AgentUnavailable(_explain_llm_error(error)) from error
         messages = result["messages"]
 
         # 取最后一条不含工具调用的 AI 回复作为正式答复

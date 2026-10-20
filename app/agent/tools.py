@@ -15,7 +15,7 @@ from typing import List, Optional
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
-from .. import nutrition, parser, repository, utils
+from .. import freetext, nutrition, parser, repository, utils
 
 # 会改动数据的工具，调用后需要通知前端刷新
 MUTATING_TOOLS = {
@@ -23,6 +23,7 @@ MUTATING_TOOLS = {
     "record_workout",
     "record_body",
     "import_pasted_template",
+    "parse_pasted_text",
     "modify_record",
     "save_profile",
     "compute_goals",
@@ -214,6 +215,51 @@ def import_pasted_template(text: str, date: Optional[str] = None) -> str:
     return _ok(
         f"已入库 {summary}，饮食合计约 {total_calories:.0f} 千卡",
         records=lines,
+        warnings=parsed["warnings"] or None,
+        unparsed=parsed["unparsed"] or None,
+    )
+
+
+@tool
+def parse_pasted_text(text: str, date: Optional[str] = None) -> str:
+    """解析用户粘贴的任意文本并入库，不要求符合模板。
+
+    适用场景：用户粘来的识图输出带了额外解释、格式和模板不一致，
+    或者干脆是自己打字描述的一顿饭。工具内部先走本地规则解析，
+    只有本地解析不出的残余片段才调 LLM 结构化，符合模板时零成本。
+    直接把原文整段传进来，不要自己拆文本。
+    """
+    parsed = freetext.parse_tiered(text, default_date=date)
+
+    saved_counts: dict = {}
+    lines: list = []
+    for record_type in ("diet", "workout", "body"):
+        items = parsed[record_type]
+        if not items:
+            continue
+        try:
+            saved = repository.add_records(record_type, items)
+        except repository.RepositoryError as error:
+            return _fail(str(error))
+        saved_counts[record_type] = len(saved)
+        lines.extend(repository.describe_record(record_type, row) for row in saved)
+
+    if not saved_counts:
+        detail = "没能从这段文本里解析出记录。"
+        if parsed.get("warnings"):
+            detail += "提示：" + "；".join(parsed["warnings"])
+        if parsed.get("llm_error"):
+            detail += f"（{parsed['llm_error']}）"
+        return _fail(detail)
+
+    total_calories = sum(row["calories"] or 0 for row in parsed["diet"])
+    summary = "、".join(
+        f"{repository.RECORD_TYPES[k]['label']} {v} 条" for k, v in saved_counts.items()
+    )
+    return _ok(
+        f"已入库 {summary}，饮食合计约 {total_calories:.0f} 千卡",
+        records=lines,
+        tier=parsed.get("tier", "local"),
         warnings=parsed["warnings"] or None,
         unparsed=parsed["unparsed"] or None,
     )
@@ -581,6 +627,7 @@ TOOLS = [
     record_workout,
     record_body,
     import_pasted_template,
+    parse_pasted_text,
     query_records,
     daily_summary,
     range_stats,
