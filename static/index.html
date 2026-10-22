@@ -14,7 +14,7 @@
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 <link rel="icon" href="/icons/icon-192.png">
-<link rel="stylesheet" href="/css/style.css?v=20261022b">
+<link rel="stylesheet" href="/css/style.css?v=20261022d">
 </head>
 <body>
 <div id="app" class="app" :data-theme="theme === 'auto' ? null : theme" v-cloak>
@@ -40,6 +40,7 @@
         {{ llmReady ? 'LLM 已接入' : 'LLM 未配置' }}
       </div>
       <button class="ghost-btn" @click="cycleTheme">外观：{{ themeLabel }}</button>
+      <button class="ghost-btn" @click="toggleSound">音效：{{ soundOn ? '开' : '关' }}</button>
     </div>
   </aside>
 
@@ -78,7 +79,7 @@
                         :style="ringStyle"></circle>
               </svg>
               <div class="ring-text">
-                <strong>{{ fmt(summary.diet.total.calories, 0) }}</strong>
+                <strong v-num="summary.diet.total.calories" data-dec="0"></strong>
                 <span v-if="effectiveGoal">/ {{ fmt(effectiveGoal, 0) }} kcal</span>
                 <span v-else>kcal</span>
                 <button class="info-btn inline" @click="showGoalInfo = !showGoalInfo" title="目标如何计算">?</button>
@@ -113,7 +114,10 @@
             <div class="deficit-box" v-if="summary.tdee">
               <div class="deficit-line">
                 <span>今日热量缺口</span>
-                <strong :style="{ color: deficitColor }">{{ deficitDisplay }}</strong>
+                <strong :style="{ color: deficitColor }">
+                  <template v-if="deficitValue !== null">{{ deficitWord }}<span v-num="deficitValue" data-dec="0"></span> kcal</template>
+                  <template v-else>—</template>
+                </strong>
               </div>
               <div class="deficit-side">
                 <span class="deficit-badge" :style="{ background: deficitColor }" v-if="deficitBand">{{ deficitBand.label }}</span>
@@ -147,24 +151,24 @@
             <div class="stat-rows">
               <div class="stat-row">
                 <span>训练时长</span>
-                <strong>{{ fmt(summary.workout.total.duration_min, 0) }} min</strong>
+                <strong><span v-num="summary.workout.total.duration_min" data-dec="0"></span> min</strong>
               </div>
               <div class="stat-row">
                 <span>训练消耗</span>
-                <strong>{{ fmt(summary.workout.total.calories, 0) }} kcal</strong>
+                <strong><span v-num="summary.workout.total.calories" data-dec="0"></span> kcal</strong>
               </div>
               <div class="stat-row">
                 <span>净热量</span>
-                <strong>{{ fmt(netCalories, 0) }} kcal</strong>
+                <strong><span v-num="netCalories" data-dec="0"></span> kcal</strong>
               </div>
               <div class="stat-row">
                 <span>体重</span>
-                <strong v-if="summary.body && summary.body.weight">{{ fmt(summary.body.weight, 1) }} kg</strong>
+                <strong v-if="summary.body && summary.body.weight"><span v-num="summary.body.weight" data-dec="1"></span> kg</strong>
                 <strong v-else class="muted">未记录</strong>
               </div>
               <div class="stat-row" v-if="todayBurn">
                 <span>{{ measuredFromPast ? '今日消耗（估算）' : '手表实测消耗' }}</span>
-                <strong>{{ fmt(todayBurn, 0) }} kcal<span class="dim" v-if="measuredFromPast"> · 按已走 {{ fmt(summary.body && summary.body.steps, 0) }} 步估算</span></strong>
+                <strong><span v-num="todayBurn" data-dec="0"></span> kcal<span class="dim" v-if="measuredFromPast"> · 按已走 {{ fmt(summary.body && summary.body.steps, 0) }} 步估算</span></strong>
               </div>
               <div class="stat-row" v-if="summary.body && summary.body.sleep_hours">
                 <span>睡眠</span>
@@ -203,7 +207,7 @@
             <div v-if="!summary.diet.records.length" class="empty">还没有记录</div>
             <div v-for="group in dietGroups" :key="group.name" class="meal-group">
               <div class="meal-name">{{ group.name }}<span class="meal-cal">{{ fmt(group.calories, 0) }} kcal</span></div>
-              <div v-for="row in group.rows" :key="row.id" class="row-item">
+              <div v-for="row in group.rows" :key="row.id" class="row-item" :data-rid="row.id">
                 <div class="row-main">
                   <span class="row-title">{{ row.food_name }}</span>
                   <span class="row-sub" v-if="row.amount">{{ row.amount }}</span>
@@ -217,7 +221,7 @@
           <div class="card">
             <div class="card-title">今日训练 <span class="count">{{ summary.workout.records.length }}</span></div>
             <div v-if="!summary.workout.records.length" class="empty">还没有记录</div>
-            <div v-for="row in summary.workout.records" :key="row.id" class="row-item">
+            <div v-for="row in summary.workout.records" :key="row.id" class="row-item" :data-rid="row.id">
               <div class="row-main">
                 <span class="row-title">{{ row.category }}</span>
                 <span class="row-sub" v-if="row.duration_min">{{ fmt(row.duration_min, 0) }} min</span>
@@ -355,7 +359,7 @@
           <table v-else class="table">
             <thead><tr><th>餐次</th><th>食物</th><th>分量</th><th class="num">kcal</th><th class="num">蛋白</th><th class="num">脂肪</th><th class="num">碳水</th><th></th></tr></thead>
             <tbody>
-              <tr v-for="row in records.diet" :key="row.id">
+              <tr v-for="row in records.diet" :key="row.id" :data-rid="row.id">
                 <template v-if="isEditing('diet', row.id)">
                   <td>
                     <select v-model="editing.draft.meal_type" class="mini-input">
@@ -454,7 +458,7 @@
           <table v-else class="table">
             <thead><tr><th>部位</th><th class="num">min</th><th class="num">kcal</th><th>备注</th><th></th></tr></thead>
             <tbody>
-              <tr v-for="row in records.workout" :key="row.id">
+              <tr v-for="row in records.workout" :key="row.id" :data-rid="row.id">
                 <template v-if="isEditing('workout', row.id)">
                   <td>
                     <select v-model="editing.draft.category" class="mini-input">
@@ -552,7 +556,7 @@
           <table v-else class="table">
             <thead><tr><th>日期</th><th class="num">体重 kg</th><th class="num">体脂 %</th><th class="num">腰围 cm</th><th class="num">睡眠 h</th><th class="num">步数</th><th></th></tr></thead>
             <tbody>
-              <tr v-for="row in bodyHistory" :key="row.id">
+              <tr v-for="row in bodyHistory" :key="row.id" :data-rid="row.id">
                 <template v-if="isEditing('body', row.id)">
                   <td><input v-model="editing.draft.date" type="date" class="mini-input"></td>
                   <td class="num"><input v-model="editing.draft.weight" type="number" step="0.1" class="mini-input num"></td>
@@ -593,7 +597,10 @@
         <div class="kpi-grid">
           <div class="kpi" v-for="k in kpis" :key="k.label">
             <span class="kpi-label">{{ k.label }}</span>
-            <strong class="kpi-value">{{ k.value }}</strong>
+            <strong class="kpi-value">
+              <template v-if="k.raw !== null">{{ k.sign || '' }}<span v-num="k.raw" :data-dec="k.dec"></span></template>
+              <template v-else>—</template>
+            </strong>
             <span class="kpi-unit">{{ k.unit }}</span>
           </div>
         </div>
@@ -690,6 +697,35 @@
         </div>
 
         <div class="card">
+          <div class="card-title">界面与音效</div>
+          <div class="stat-rows">
+            <div class="stat-row">
+              <span>音效</span>
+              <strong :class="{ muted: !soundOn }">{{ soundOn ? '开启' : '关闭' }}</strong>
+            </div>
+            <div class="stat-row">
+              <span>动效</span>
+              <strong>{{ motionLabel }}</strong>
+            </div>
+          </div>
+          <div class="btn-row">
+            <button class="ghost-btn" @click="toggleSound">{{ soundOn ? '关闭音效' : '开启音效' }}</button>
+            <button class="ghost-btn" @click="cycleMotion">动效：{{ motionLabel }}</button>
+            <button class="ghost-btn" :disabled="!soundOn" @click="testSound">试听</button>
+          </div>
+          <label class="vol-row">
+            音量
+            <input class="vol-range" type="range" min="0" max="100" step="1"
+                   v-model.number="soundVol" @input="onVolume">
+            <span class="vol-num">{{ soundVol }}</span>
+          </label>
+          <p class="hint">
+            音效全部由浏览器实时合成（振荡器 + 噪声），不含任何音频文件。
+            系统开启了「减少动态效果」时动效默认关闭，这里可以强制打开。
+          </p>
+        </div>
+
+        <div class="card">
         <div class="card-title">
           识图提示词
           <button class="link-btn" @click="copyPrompt">复制</button>
@@ -743,7 +779,8 @@
   </main>
 
   <!-- 悬浮助手按钮 -->
-  <button class="fab" @click="chatOpen = !chatOpen" aria-label="助手" title="助手">💬</button>
+  <button class="fab" :class="{ open: chatOpen }" @click="chatOpen = !chatOpen"
+          :aria-label="chatOpen ? '收起助手' : '助手'" :title="chatOpen ? '收起助手' : '助手'">助手</button>
 
   <!-- 悬浮助手遮罩 -->
   <div class="float-overlay" :class="{ open: chatOpen }" @click="chatOpen = false"></div>
@@ -788,7 +825,7 @@
         </div>
       </div>
 
-      <div v-if="chatBusy" class="msg assistant"><div class="bubble typing">思考中…</div></div>
+      <div v-if="chatBusy" class="msg assistant"><div class="bubble typing" aria-label="思考中"><i></i><i></i><i></i></div></div>
     </div>
 
     <div class="chat-input">
@@ -798,7 +835,9 @@
     </div>
   </div>
 
-  <div class="toast" v-if="toast" :class="toast.tone">{{ toast.text }}</div>
+  <transition name="toast">
+    <div class="toast" v-if="toast" :class="toast.tone" role="status">{{ toast.text }}</div>
+  </transition>
 </div>
 
 <!-- 本地脚本带版本戳：改完前端直接刷新就能生效，不会被浏览器旧缓存挡住 -->
@@ -814,7 +853,8 @@ if (!window.Chart) {
   document.write('<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"><\/script>');
 }
 </script>
-<script src="/js/app.js?v=20261022b"></script>
+<script src="/js/fx.js?v=20261022d"></script>
+<script src="/js/app.js?v=20261022d"></script>
 <script>
   // 注册 Service Worker，让 Chrome 能把它装成独立应用。
   // 只在安全上下文注册：局域网 http 下浏览器本来就不允许，也没必要。

@@ -100,7 +100,7 @@
 
   applyChartDefaults();
 
-  createApp({
+  const app = createApp({
     data() {
       return {
         // 导航与布局
@@ -176,6 +176,11 @@
         planExplain: "",
         showDeficitInfo: false,
         showGoalInfo: false,
+
+        // 动效与音效：真值存在 localStorage，这里只是给界面读的镜像
+        soundOn: true,
+        soundVol: 55,
+        motion: "auto",
         // 这两个表单对象必须在 data() 里初始化，否则首次进入设置页时
         // v-model 绑到 undefined 会让 Vue 抛错、整页黑屏
         profileForm: { height: "", birth_year: "", gender: "male", activity_level: "moderate", goal_type: "maintain" },
@@ -196,6 +201,11 @@
       },
       themeLabel() {
         return this.theme === "auto" ? "跟随系统" : this.theme === "light" ? "浅色" : "深色";
+      },
+      motionLabel() {
+        if (this.motion === "reduced") return "强制关闭";
+        if (this.motion === "full") return "强制开启";
+        return window.FX && FX.motionOff() ? "跟随系统（系统要求减少）" : "跟随系统";
       },
       goalCalories() {
         return this.goals && this.goals.daily_calories ? this.goals.daily_calories : null;
@@ -320,15 +330,20 @@
         if (!s) return [];
         const a = s.averages || {};
         const t = s.totals || {};
+        // raw 给数字滚动用，value 仍保留格式化字符串做兜底
+        const num = (v, dec) => (v == null || isNaN(Number(v)) ? null : Number(v));
         return [
-          { label: "日均摄入", value: this.fmt(a.diet_calories, 0), unit: "kcal" },
-          { label: "日均训练消耗", value: this.fmt(a.workout_calories, 0), unit: "kcal" },
-          { label: "训练天数", value: this.fmt(t.workout_days, 0), unit: "d" },
-          { label: "平均体重", value: this.fmt(a.weight, 1), unit: "kg" },
-          { label: "饮食条数", value: this.fmt(t.diet_records, 0), unit: "" },
+          { label: "日均摄入", value: this.fmt(a.diet_calories, 0), raw: num(a.diet_calories), dec: 0, unit: "kcal" },
+          { label: "日均训练消耗", value: this.fmt(a.workout_calories, 0), raw: num(a.workout_calories), dec: 0, unit: "kcal" },
+          { label: "训练天数", value: this.fmt(t.workout_days, 0), raw: num(t.workout_days), dec: 0, unit: "d" },
+          { label: "平均体重", value: this.fmt(a.weight, 1), raw: num(a.weight), dec: 1, unit: "kg" },
+          { label: "饮食条数", value: this.fmt(t.diet_records, 0), raw: num(t.diet_records), dec: 0, unit: "" },
           {
             label: "目标差距",
             value: s.goal_gap == null ? "—" : (s.goal_gap >= 0 ? "+" : "") + this.fmt(s.goal_gap, 0),
+            raw: num(s.goal_gap),
+            dec: 0,
+            sign: s.goal_gap != null && s.goal_gap >= 0 ? "+" : "",
             unit: "kcal",
           },
         ];
@@ -347,15 +362,27 @@
       deficitBand() {
         return this.summary.deficit_band;
       },
-      deficitDisplay() {
-        // 与后端缺口口径一致：基准消耗（当天实时/最近实测/公式TDEE）− 净摄入
+      // 与后端缺口口径一致：基准消耗（当天实时/最近实测/公式TDEE）− 净摄入。
+      // 拆成「词 + 数值」两段，数值交给 v-num 滚动，词保持静态，避免动画时文字抖。
+      deficitSplit() {
         const burn = this.todayBurn || this.measuredBurn || this.summary.tdee;
         const s = this.summary;
         const intake = s.diet.total.calories || 0;
         const net = this.measuredBurn ? intake : intake - (s.workout.total.calories || 0);
-        if (!burn) return "—";
+        if (!burn) return { word: "", value: null };
         const d = burn - net;
-        return (d >= 0 ? "缺口 " : "盈余 ") + this.fmt(Math.abs(d), 0) + " kcal";
+        return { word: d >= 0 ? "缺口" : "盈余", value: Math.abs(d) };
+      },
+      deficitWord() {
+        return this.deficitSplit.word;
+      },
+      deficitValue() {
+        return this.deficitSplit.value;
+      },
+      deficitDisplay() {
+        const d = this.deficitSplit;
+        if (d.value === null) return "—";
+        return d.word + " " + this.fmt(d.value, 0) + " kcal";
       },
       deficitColor() {
         const band = this.summary.deficit_band;
@@ -366,6 +393,13 @@
     mounted() {
       this.theme = localStorage.getItem("fit-theme") || "auto";
       this.applyTheme();
+      // 动效/音效偏好从 localStorage 读回来，界面开关只是镜像
+      if (window.FX) {
+        this.soundOn = FX.sound.on();
+        this.soundVol = FX.sound.volume();
+        this.motion = FX.getMotion();
+        this.$nextTick(() => FX.refreshScroll());
+      }
       this.bootstrap();
       // ESC 关闭浮窗
       window.addEventListener("keydown", this.onKeyDown);
@@ -462,11 +496,17 @@
       },
 
       notify(opts) {
-        this.toast = { text: opts.text, tone: opts.tone || "ok" };
+        const tone = opts.tone || "ok";
+        this.toast = { text: opts.text, tone };
         if (this._toastTimer) clearTimeout(this._toastTimer);
         this._toastTimer = setTimeout(() => {
           this.toast = null;
         }, 2600);
+        // 结果音：成功是继电器闭合，失败是两声钝响，都不带旋律
+        if (window.FX) {
+          FX.sound.play(tone === "ok" ? "commit" : "error");
+          if (tone !== "ok") FX.haptic(14);
+        }
       },
 
       // ---------------------------------------------------------- 启动引导
@@ -502,9 +542,16 @@
 
       // ---------------------------------------------------------- 导航与主题
       go(key) {
+        const changed = this.view !== key;
         this.view = key;
         this.navOpen = false;
         this.onEnterView(key);
+        if (changed) {
+          // 换页回到顶部：从半页高的位置进入新页面没有意义
+          const sc = document.querySelector(".scroll");
+          if (sc) sc.scrollTop = 0;
+          if (window.FX) this.$nextTick(() => FX.refreshScroll());
+        }
       },
       onEnterView(key) {
         if (key === "today") this.loadToday();
@@ -617,6 +664,33 @@
         return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
       },
 
+      // ---------------------------------------------------------- 音效与动效
+      toggleSound() {
+        if (!window.FX) return;
+        this.soundOn = !this.soundOn;
+        FX.sound.setOn(this.soundOn);
+        if (this.soundOn) {
+          FX.sound.unlock();
+          FX.sound.play("commit");
+        }
+      },
+      onVolume() {
+        if (window.FX) FX.sound.setVolume(this.soundVol);
+      },
+      testSound() {
+        if (!window.FX) return;
+        FX.sound.setOn(true);
+        this.soundOn = true;
+        FX.sound.unlock();
+        FX.sound.play("commit");
+      },
+      cycleMotion() {
+        const order = ["auto", "full", "reduced"];
+        this.motion = order[(order.indexOf(this.motion) + 1) % order.length];
+        if (window.FX) FX.setMotion(this.motion);
+        this.notify({ text: "动效：" + this.motionLabel, tone: "ok" });
+      },
+
       // ---------------------------------------------------------- 数据加载
       async refreshData() {
         try {
@@ -721,7 +795,19 @@
           this.busy = false;
         }
       },
+      // 新入库的那一行闪一下，减少「到底写进去了没有」的疑问
+      flashNew(res) {
+        const row = res && res.records && res.records[0];
+        if (!row || row.id == null || !window.FX) return;
+        this.$nextTick(() => {
+          setTimeout(() => FX.flashById(row.id), 30);
+        });
+      },
+
       async removeRecord(type, row) {
+        // 先让这一行退场，再真删；删失败时数据还在，界面会重新拉回来
+        const el = window.FX ? FX.byId(row.id) : null;
+        if (el) await new Promise((resolve) => FX.leave(el, resolve));
         try {
           await this.api("/api/records/" + type + "/" + row.id, null, "DELETE");
           if (type === "body") {
@@ -733,11 +819,14 @@
           if (this.view === "today") this.loadToday();
           this.notify({ text: "已删除", tone: "ok" });
         } catch (e) {
+          // 删失败就把行拉回来，别让用户以为已经删掉了
+          if (el) el.classList.remove("fx-leaving");
           this.notify({ text: "删除失败：" + e.message, tone: "error" });
         }
       },
       async submitForm(type) {
         this.busy = true;
+        let created = null;
         try {
           if (type === "diet") {
             const f = this.dietForm;
@@ -751,7 +840,7 @@
               fat: this.num(f.fat),
               carbs: this.num(f.carbs),
             };
-            await this.api("/api/records/diet", payload, "POST");
+            created = await this.api("/api/records/diet", payload, "POST");
             this.dietForm = { meal_type: "午餐", food_name: "", amount: "", calories: "", protein: "", fat: "", carbs: "" };
             this.notify({ text: "已添加饮食", tone: "ok" });
           } else if (type === "workout") {
@@ -763,17 +852,18 @@
               calories: this.num(f.calories),
               note: f.note || null,
             };
-            await this.api("/api/records/workout", payload, "POST");
+            created = await this.api("/api/records/workout", payload, "POST");
             this.workoutForm = { category: "有氧", duration_min: "", calories: "", note: "" };
             this.notify({ text: "已添加训练", tone: "ok" });
           } else if (type === "body") {
             const f = this.bodyForm;
             const payload = { date: this.selectedDate, weight: this.num(f.weight), body_fat: this.num(f.body_fat), waist: this.num(f.waist) };
-            await this.api("/api/records/body", payload, "POST");
+            created = await this.api("/api/records/body", payload, "POST");
             this.bodyForm = { weight: "", body_fat: "", waist: "" };
             this.notify({ text: "已记录身体数据", tone: "ok" });
           }
           await this.refreshData();
+          this.flashNew(created);
         } catch (e) {
           this.notify({ text: "添加失败：" + e.message, tone: "error" });
         } finally {
@@ -805,6 +895,7 @@
           this.pasteText = "";
           this.parsePreview = null;
           await this.refreshData();
+          this.flashNew(res);
         } catch (e) {
           this.notify({ text: "导入失败：" + e.message, tone: "error" });
         } finally {
@@ -839,6 +930,7 @@
       },
       onMealDrop(event) {
         this.mealDrag = false;
+        if (window.FX) FX.sound.play("drop");
         this.uploadMealFiles(Array.from(event.dataTransfer.files || []));
       },
       async uploadMealFiles(files) {
@@ -1452,5 +1544,23 @@
         this.$nextTick(() => this.scrollChat());
       },
     },
-  }).mount("#app");
+  });
+
+  // 数字滚动指令：模板里给空元素挂 v-num，文本由 fx.js 接管。
+  // fx.js 没加载成功时退化成直接写文本，至少不会把主数字留空。
+  if (window.FX && FX.numDirective) {
+    app.directive("num", FX.numDirective);
+  } else {
+    const paintFallback = (el, v) => {
+      const dec = parseInt(el.getAttribute("data-dec") || "0", 10) || 0;
+      const n = Number(v);
+      el.textContent = isFinite(n) && v !== null && v !== "" ? n.toFixed(dec) : "—";
+    };
+    app.directive("num", {
+      mounted: (el, b) => paintFallback(el, b.value),
+      updated: (el, b) => paintFallback(el, b.value),
+    });
+  }
+
+  app.mount("#app");
 })();
