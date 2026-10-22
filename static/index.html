@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0a0b0d" media="(prefers-color-scheme: dark)">
-<meta name="theme-color" content="#f4f1eb" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#07080a" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f2efe7" media="(prefers-color-scheme: light)">
 <!-- 手机「添加到主屏幕」后像应用一样全屏打开，不带浏览器地址栏 -->
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -14,10 +14,19 @@
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 <link rel="icon" href="/icons/icon-192.png">
-<link rel="stylesheet" href="/css/style.css?v=20261022d">
+<link rel="stylesheet" href="/css/style.css?v=20261022i">
 </head>
 <body>
 <div id="app" class="app" :data-theme="theme === 'auto' ? null : theme" v-cloak>
+
+  <!-- 环境层：光斑 + 光尘流场 + 纸纹，全部指针穿透 -->
+  <div class="ambient" aria-hidden="true">
+    <div class="ambient-bloom bloom-a"></div>
+    <div class="ambient-bloom bloom-b"></div>
+    <div class="ambient-bloom bloom-c"></div>
+  </div>
+  <canvas class="atmos" aria-hidden="true"></canvas>
+  <div class="grain" aria-hidden="true"></div>
 
   <div class="scrim" v-if="navOpen" @click="navOpen = false"></div>
 
@@ -25,14 +34,17 @@
   <aside class="sidebar" :class="{ open: navOpen }">
     <div class="brand">
       <span class="brand-mark"></span>
-      <span>健身记录助手</span>
+      <span class="brand-text">
+        <b>健身记录</b>
+        <i>Field Recorder</i>
+      </span>
     </div>
     <nav class="nav">
       <button v-for="item in navItems" :key="item.key"
               class="nav-item" :class="{ active: view === item.key }"
               @click="go(item.key)">
         <span class="nav-dot" :style="{ background: item.color }"></span>
-        <span>{{ item.label }}</span>
+        <span class="nav-label">{{ item.label }}</span>
       </button>
     </nav>
     <div class="sidebar-foot">
@@ -48,7 +60,10 @@
   <main class="main">
     <header class="topbar">
       <button class="icon-btn only-mobile" @click="navOpen = true">导航</button>
-      <h1>{{ currentNav.label }}</h1>
+      <div class="page-head">
+        <span class="page-index">{{ navIndex }}</span>
+        <h1>{{ currentNav.label }}</h1>
+      </div>
       <div class="topbar-right">
         <div class="date-nav" v-if="['today','diet','workout','body'].includes(view)">
           <button class="date-arrow" @click="shiftDate(-1)" aria-label="前一天" title="前一天">‹</button>
@@ -61,148 +76,130 @@
     <div class="scroll">
 
       <!-- 今日总览 -->
-      <section v-if="view === 'today'" class="page">
-        <div class="grid-3">
-          <div class="card ring-card">
-            <div class="card-title">热量摄入</div>
-            <div class="ring-wrap">
-              <svg viewBox="0 0 120 120" class="ring" aria-hidden="true">
-                <defs>
-                  <linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1">
-                    <stop offset="0%" class="ring-grad-a"></stop>
-                    <stop offset="100%" class="ring-grad-b"></stop>
-                  </linearGradient>
-                </defs>
-                <circle cx="60" cy="60" r="58.5" class="ring-ticks"></circle>
-                <circle cx="60" cy="60" r="52" class="ring-track"></circle>
-                <circle cx="60" cy="60" r="52" class="ring-fill"
-                        :style="ringStyle"></circle>
-              </svg>
-              <div class="ring-text">
-                <strong v-num="summary.diet.total.calories" data-dec="0"></strong>
-                <span v-if="effectiveGoal">/ {{ fmt(effectiveGoal, 0) }} kcal</span>
-                <span v-else>kcal</span>
-                <button class="info-btn inline" @click="showGoalInfo = !showGoalInfo" title="目标如何计算">?</button>
+      <section v-if="view === 'today'" class="page page-today">
+
+        <article class="hero">
+          <div class="hero-glow" aria-hidden="true"></div>
+
+          <div class="gauge">
+            <div class="gauge-dial">
+            <svg viewBox="0 0 220 220" class="gauge-svg" aria-hidden="true">
+              <defs>
+                <linearGradient id="ringGrad" x1="0" y1="1" x2="1" y2="0">
+                  <stop offset="0%" class="ring-grad-a"></stop>
+                  <stop offset="100%" class="ring-grad-b"></stop>
+                </linearGradient>
+              </defs>
+              <g class="gauge-ticks">
+                <line v-for="t in ringTicks" :key="t.i"
+                      :x1="t.x1" :y1="t.y1" :x2="t.x2" :y2="t.y2"
+                      :class="{ lit: t.lit, major: t.major }"></line>
+              </g>
+              <circle cx="110" cy="110" r="74" class="gauge-track"></circle>
+              <circle cx="110" cy="110" r="86" class="gauge-fill" :style="ringStyle"></circle>
+            </svg>
+            <div class="gauge-read">
+              <strong v-num="summary.diet.total.calories" data-dec="0"></strong>
+              <span class="gauge-unit">kcal</span>
+            </div>
+            </div>
+            <div class="gauge-target" v-if="effectiveGoal">
+              目标 {{ fmt(effectiveGoal, 0) }} kcal
+              <button class="info-btn inline" @click="showGoalInfo = !showGoalInfo" title="目标如何计算">?</button>
+            </div>
+            <div class="gauge-target" v-else>未设定目标</div>
+          </div>
+
+          <div class="readout">
+            <div class="readout-kicker">今日热量缺口</div>
+            <div class="readout-value" :style="{ color: deficitColor }" v-if="deficitValue !== null">
+              <span class="readout-word">{{ deficitWord }}</span><span v-num="deficitValue" data-dec="0"></span><i>kcal</i>
+            </div>
+            <div class="readout-value empty-read" v-else>—</div>
+            <div class="readout-tags">
+              <span class="deficit-badge" :style="{ background: deficitColor }" v-if="deficitBand">{{ deficitBand.label }}</span>
+              <button class="info-btn" @click="showDeficitInfo = !showDeficitInfo" title="缺口是什么意思">?</button>
+            </div>
+            <div class="readout-metrics" v-if="effectiveGoal">
+              <div class="rm">
+                <span>摄入</span>
+                <b>{{ fmt(summary.diet.total.calories, 0) }}</b>
+              </div>
+              <div class="rm">
+                <span>目标</span>
+                <b>{{ fmt(effectiveGoal, 0) }}</b>
+              </div>
+              <div class="rm">
+                <span>剩余</span>
+                <b :class="{ over: remainingCalories < 0 }">{{ remainingCalories > 0 ? remainingCalories : (remainingCalories === 0 ? 0 : '+' + (-remainingCalories)) }}</b>
               </div>
             </div>
-            <div class="ring-bonus" v-if="measuredBurn">
-              <span v-if="measuredFromPast">已按手表实测消耗 {{ fmt(measuredBurn, 0) }} kcal 动态调整（{{ summary.tdee_measured_date }}）</span>
-              <span v-else>已按今日手表实测消耗 {{ fmt(measuredBurn, 0) }} kcal 动态调整</span>
+            <div class="readout-note" v-if="measuredBurn">
+              <span v-if="measuredFromPast">目标环按 {{ summary.tdee_measured_date }} 手表实测 {{ fmt(measuredBurn, 0) }} kcal 动态调整</span>
+              <span v-else>目标环按今日手表实测 {{ fmt(measuredBurn, 0) }} kcal 动态调整</span>
             </div>
-            <div class="ring-bonus" v-else-if="workoutBonus">
-              <span>含训练加成 +{{ fmt(workoutBonus, 0) }} kcal（{{ fmt(goalCalories, 0) }} + 训练消耗）</span>
-            </div>
-            <div class="goal-pop" v-if="showGoalInfo">
-              <div class="goal-pop-title">每日热量目标如何计算</div>
-              <table class="goal-pop-table">
-                <thead><tr><th>步骤</th><th>公式</th><th>示例（你的数据）</th></tr></thead>
-                <tbody>
-                  <tr><td>① BMR 基础代谢</td><td>Mifflin-St Jeor</td><td>{{ fmt(summary.body && summary.body.weight ? summary.body.weight : (profile && profile.latest_weight), 1) || '—' }} kg · 你的 BMR</td></tr>
-                  <tr><td>② TDEE 每日总消耗</td><td>BMR × 活动系数</td><td>BMR × {{ (goals && goals.activity_factor) || '1.2' }} ≈ {{ fmt(summary.tdee, 0) }} kcal</td></tr>
-                  <tr><td>③ 每日目标</td><td>TDEE × 目标系数</td><td>{{ fmt(summary.tdee, 0) }} × {{ goals && goals.goal_ratio ? goals.goal_ratio : '1.10' }} ≈ {{ fmt(goalCalories, 0) }} kcal</td></tr>
-                  <tr v-if="measuredBurn"><td>④ 实测修正</td><td>每日目标 +（手表实测 − TDEE）</td><td>{{ fmt(goalCalories, 0) }} + ({{ fmt(measuredBurn, 0) }} − {{ fmt(summary.tdee, 0) }}) = {{ fmt(effectiveGoal, 0) }} kcal</td></tr>
-                  <tr v-else><td>④ 有效目标</td><td>每日目标 + 训练消耗</td><td>{{ fmt(goalCalories, 0) }} + {{ fmt(workoutBonus, 0) }} = {{ fmt(effectiveGoal, 0) }} kcal</td></tr>
-                </tbody>
-              </table>
-              <div class="goal-pop-note">
-                活动系数：久坐 1.2 · 轻度 1.375 · 中度 1.55 · 高强度 1.725<br>
-                目标系数：减脂 ×0.80 · 维持 ×1.00 · 增肌 ×1.10<br>
-                配了手表时第 ④ 步把手表实测的全天总消耗（含基础代谢，比公式准）换成基准，
-                公式不改变你的热量缺口方向，只是让「今天能吃多少」跟着真实消耗浮动。
-              </div>
-            </div>
-            <div class="deficit-box" v-if="summary.tdee">
-              <div class="deficit-line">
-                <span>今日热量缺口</span>
-                <strong :style="{ color: deficitColor }">
-                  <template v-if="deficitValue !== null">{{ deficitWord }}<span v-num="deficitValue" data-dec="0"></span> kcal</template>
-                  <template v-else>—</template>
-                </strong>
-              </div>
-              <div class="deficit-side">
-                <span class="deficit-badge" :style="{ background: deficitColor }" v-if="deficitBand">{{ deficitBand.label }}</span>
-                <button class="info-btn" @click="showDeficitInfo = !showDeficitInfo" title="缺口是什么意思">?</button>
-              </div>
+            <div class="readout-note" v-else-if="workoutBonus">
+              目标含训练加成 +{{ fmt(workoutBonus, 0) }} kcal（{{ fmt(goalCalories, 0) }} + 训练消耗）
             </div>
             <div class="deficit-basis" v-if="summary.tdee && summary.tdee_measured_date && summary.tdee_measured_date !== summary.date">
               缺口按今日实时消耗 <b>{{ fmt(todayBurn, 0) }} kcal</b> 估算（全天未过完）· 目标环按 {{ summary.tdee_measured_date }} 实测 <b>{{ fmt(measuredBurn, 0) }} kcal</b>
-            </div>
-            <div class="deficit-pop" v-if="showDeficitInfo && summary.tdee">
-              <div class="deficit-pop-title">缺口 = 当天总消耗 − 净摄入</div>
-              <div class="deficit-pop-sub">
-                当天总消耗取手表数据：所选日期已经过完，就直接用那天的实测；
-                若看的是今天，全天还没走完，按「静息消耗 + 已走步数」推算全天
-                （约 {{ fmt(todayBurn, 0) }} kcal）。完全没有手表数据才用公式 TDEE。
-                净摄入 = 饮食摄入（手表口径下不再重复减运动消耗）。
-              </div>
-              <div v-for="b in deficitRef" :key="b.label" class="deficit-pop-row">
-                <span class="deficit-pop-range" :style="{ color: toneColor(b.tone) }">{{ b.range }}</span>
-                <span class="deficit-pop-label">{{ b.label }}</span>
-                <span class="deficit-pop-desc">{{ b.desc }}</span>
-              </div>
             </div>
             <div class="deficit-box muted" v-if="!summary.tdee">
               <span>建立档案后自动显示热量缺口</span>
             </div>
           </div>
 
-          <div class="card">
-            <div class="card-title">今日概况</div>
-            <div class="stat-rows">
-              <div class="stat-row">
-                <span>训练时长</span>
-                <strong><span v-num="summary.workout.total.duration_min" data-dec="0"></span> min</strong>
+          <div class="hero-macros">
+            <div class="hero-macros-title">宏量分配</div>
+            <div class="macro" v-for="m in macroBars" :key="m.key">
+              <div class="macro-head">
+                <span>{{ m.label }}</span>
+                <span class="macro-num">
+                  {{ fmt(m.value, 1) }}<template v-if="m.goal"> / {{ fmt(m.goal, 0) }}</template> g
+                </span>
               </div>
-              <div class="stat-row">
-                <span>训练消耗</span>
-                <strong><span v-num="summary.workout.total.calories" data-dec="0"></span> kcal</strong>
-              </div>
-              <div class="stat-row">
-                <span>净热量</span>
-                <strong><span v-num="netCalories" data-dec="0"></span> kcal</strong>
-              </div>
-              <div class="stat-row">
-                <span>体重</span>
-                <strong v-if="summary.body && summary.body.weight"><span v-num="summary.body.weight" data-dec="1"></span> kg</strong>
-                <strong v-else class="muted">未记录</strong>
-              </div>
-              <div class="stat-row" v-if="todayBurn">
-                <span>{{ measuredFromPast ? '今日消耗（估算）' : '手表实测消耗' }}</span>
-                <strong><span v-num="todayBurn" data-dec="0"></span> kcal<span class="dim" v-if="measuredFromPast"> · 按已走 {{ fmt(summary.body && summary.body.steps, 0) }} 步估算</span></strong>
-              </div>
-              <div class="stat-row" v-if="summary.body && summary.body.sleep_hours">
-                <span>睡眠</span>
-                <strong>{{ fmt(summary.body.sleep_hours, 1) }} h<span class="dim" v-if="summary.body.sleep_score"> · 评分 {{ fmt(summary.body.sleep_score, 0) }}</span></strong>
-              </div>
-              <div class="stat-row" v-if="summary.body && summary.body.resting_hr">
-                <span>静息心率</span>
-                <strong>{{ fmt(summary.body.resting_hr, 0) }} bpm<span class="dim" v-if="summary.body.stress_avg"> · 压力 {{ fmt(summary.body.stress_avg, 0) }}</span></strong>
-              </div>
-              <div class="stat-row" v-if="summary.body && summary.body.steps">
-                <span>步数</span>
-                <strong>{{ fmt(summary.body.steps, 0) }}</strong>
-              </div>
+              <div class="bar"><div class="bar-fill" :class="'m-' + m.key" :style="{ width: m.percent + '%' }"></div></div>
             </div>
           </div>
 
-          <div class="card">
-            <div class="card-title">三大宏量</div>
-            <div class="macro-list">
-              <div class="macro" v-for="m in macroBars" :key="m.key">
-                <div class="macro-head">
-                  <span>{{ m.label }}</span>
-                  <span class="macro-num">
-                    {{ fmt(m.value, 1) }}<template v-if="m.goal"> / {{ fmt(m.goal, 0) }}</template> g
-                  </span>
-                </div>
-                <div class="bar"><div class="bar-fill" :class="'m-' + m.key" :style="{ width: m.percent + '%' }"></div></div>
-              </div>
+          <div class="goal-pop" v-if="showGoalInfo">
+            <div class="goal-pop-title">每日热量目标如何计算</div>
+            <table class="goal-pop-table">
+              <thead><tr><th>步骤</th><th>公式</th><th>示例（你的数据）</th></tr></thead>
+              <tbody>
+                <tr><td>① BMR 基础代谢</td><td>Mifflin-St Jeor</td><td>{{ fmt(summary.body && summary.body.weight ? summary.body.weight : (profile && profile.latest_weight), 1) || '—' }} kg · 你的 BMR</td></tr>
+                <tr><td>② TDEE 每日总消耗</td><td>BMR × 活动系数</td><td>BMR × {{ (goals && goals.activity_factor) || '1.2' }} ≈ {{ fmt(summary.tdee, 0) }} kcal</td></tr>
+                <tr><td>③ 每日目标</td><td>TDEE × 目标系数</td><td>{{ fmt(summary.tdee, 0) }} × {{ goals && goals.goal_ratio ? goals.goal_ratio : '1.10' }} ≈ {{ fmt(goalCalories, 0) }} kcal</td></tr>
+                <tr v-if="measuredBurn"><td>④ 实测修正</td><td>每日目标 +（手表实测 − TDEE）</td><td>{{ fmt(goalCalories, 0) }} + ({{ fmt(measuredBurn, 0) }} − {{ fmt(summary.tdee, 0) }}) = {{ fmt(effectiveGoal, 0) }} kcal</td></tr>
+                <tr v-else><td>④ 有效目标</td><td>每日目标 + 训练消耗</td><td>{{ fmt(goalCalories, 0) }} + {{ fmt(workoutBonus, 0) }} = {{ fmt(effectiveGoal, 0) }} kcal</td></tr>
+              </tbody>
+            </table>
+            <div class="goal-pop-note">
+              活动系数：久坐 1.2 · 轻度 1.375 · 中度 1.55 · 高强度 1.725<br>
+              目标系数：减脂 ×0.80 · 维持 ×1.00 · 增肌 ×1.10<br>
+              配了手表时第 ④ 步把手表实测的全天总消耗（含基础代谢，比公式准）换成基准，
+              公式不改变你的热量缺口方向，只是让「今天能吃多少」跟着真实消耗浮动。
             </div>
           </div>
-        </div>
 
-        <div class="grid-2">
-          <div class="card">
+          <div class="deficit-pop" v-if="showDeficitInfo && summary.tdee">
+            <div class="deficit-pop-title">缺口 = 当天总消耗 − 净摄入</div>
+            <div class="deficit-pop-sub">
+              当天总消耗取手表数据：所选日期已经过完，就直接用那天的实测；
+              若看的是今天，全天还没走完，按「静息消耗 + 已走步数」推算全天
+              （约 {{ fmt(todayBurn, 0) }} kcal）。完全没有手表数据才用公式 TDEE。
+              净摄入 = 饮食摄入（手表口径下不再重复减运动消耗）。
+            </div>
+            <div v-for="b in deficitRef" :key="b.label" class="deficit-pop-row">
+              <span class="deficit-pop-range" :style="{ color: toneColor(b.tone) }">{{ b.range }}</span>
+              <span class="deficit-pop-label">{{ b.label }}</span>
+              <span class="deficit-pop-desc">{{ b.desc }}</span>
+            </div>
+          </div>
+        </article>
+
+        <div class="today-body">
+          <div class="card card-diet">
             <div class="card-title">今日饮食 <span class="count">{{ summary.diet.records.length }}</span></div>
             <div v-if="!summary.diet.records.length" class="empty">还没有记录</div>
             <div v-for="group in dietGroups" :key="group.name" class="meal-group">
@@ -218,23 +215,64 @@
             </div>
           </div>
 
-          <div class="card">
-            <div class="card-title">今日训练 <span class="count">{{ summary.workout.records.length }}</span></div>
-            <div v-if="!summary.workout.records.length" class="empty">还没有记录</div>
-            <div v-for="row in summary.workout.records" :key="row.id" class="row-item" :data-rid="row.id">
-              <div class="row-main">
-                <span class="row-title">{{ row.category }}</span>
-                <span class="row-sub" v-if="row.duration_min">{{ fmt(row.duration_min, 0) }} min</span>
+          <div class="today-rail">
+            <div class="card">
+              <div class="card-title">今日概况</div>
+              <div class="stat-rows">
+                <div class="stat-row">
+                  <span>训练时长</span>
+                  <strong><span v-num="summary.workout.total.duration_min" data-dec="0"></span> min</strong>
+                </div>
+                <div class="stat-row">
+                  <span>训练消耗</span>
+                  <strong><span v-num="summary.workout.total.calories" data-dec="0"></span> kcal</strong>
+                </div>
+                <div class="stat-row">
+                  <span>净热量</span>
+                  <strong><span v-num="netCalories" data-dec="0"></span> kcal</strong>
+                </div>
+                <div class="stat-row">
+                  <span>体重</span>
+                  <strong v-if="summary.body && summary.body.weight"><span v-num="summary.body.weight" data-dec="1"></span> kg</strong>
+                  <strong v-else class="muted">未记录</strong>
+                </div>
+                <div class="stat-row" v-if="todayBurn">
+                  <span>{{ measuredFromPast ? '今日消耗（估算）' : '手表实测消耗' }}</span>
+                  <strong><span v-num="todayBurn" data-dec="0"></span> kcal<span class="dim" v-if="measuredFromPast"> · 按已走 {{ fmt(summary.body && summary.body.steps, 0) }} 步估算</span></strong>
+                </div>
+                <div class="stat-row" v-if="summary.body && summary.body.sleep_hours">
+                  <span>睡眠</span>
+                  <strong>{{ fmt(summary.body.sleep_hours, 1) }} h<span class="dim" v-if="summary.body.sleep_score"> · 评分 {{ fmt(summary.body.sleep_score, 0) }}</span></strong>
+                </div>
+                <div class="stat-row" v-if="summary.body && summary.body.resting_hr">
+                  <span>静息心率</span>
+                  <strong>{{ fmt(summary.body.resting_hr, 0) }} bpm<span class="dim" v-if="summary.body.stress_avg"> · 压力 {{ fmt(summary.body.stress_avg, 0) }}</span></strong>
+                </div>
+                <div class="stat-row" v-if="summary.body && summary.body.steps">
+                  <span>步数</span>
+                  <strong>{{ fmt(summary.body.steps, 0) }}</strong>
+                </div>
               </div>
-              <span class="row-value">{{ fmt(row.calories, 0) }}</span>
-              <button class="del-btn" @click="removeRecord('workout', row)">删除</button>
+            </div>
+
+            <div class="card">
+              <div class="card-title">今日训练 <span class="count">{{ summary.workout.records.length }}</span></div>
+              <div v-if="!summary.workout.records.length" class="empty">还没有记录</div>
+              <div v-for="row in summary.workout.records" :key="row.id" class="row-item" :data-rid="row.id">
+                <div class="row-main">
+                  <span class="row-title">{{ row.category }}</span>
+                  <span class="row-sub" v-if="row.duration_min">{{ fmt(row.duration_min, 0) }} min</span>
+                </div>
+                <span class="row-value">{{ fmt(row.calories, 0) }}</span>
+                <button class="del-btn" @click="removeRecord('workout', row)">删除</button>
+              </div>
             </div>
           </div>
         </div>
       </section>
 
       <!-- 饮食记录 -->
-      <section v-else-if="view === 'diet'" class="page">
+      <section v-else-if="view === 'diet'" class="page page-diet">
         <div class="card">
           <div class="entry-tabs">
             <button v-for="tab in dietTabs" :key="tab.key"
@@ -401,7 +439,7 @@
       </section>
 
       <!-- 训练记录 -->
-      <section v-else-if="view === 'workout'" class="page">
+      <section v-else-if="view === 'workout'" class="page page-workout">
         <div class="card" v-if="garminStatus && garminStatus.configured">
           <div class="card-title">
             ⌚ 手表全天消耗（{{ summary.date }}）
@@ -493,7 +531,7 @@
       </section>
 
       <!-- 身体数据 -->
-      <section v-else-if="view === 'body'" class="page">
+      <section v-else-if="view === 'body'" class="page page-body">
         <div class="card" v-if="garminStatus && garminStatus.configured && summary.body && (summary.body.sleep_hours || summary.body.resting_hr || summary.body.steps)">
           <div class="card-title">
             ⌚ 手表身体指标（{{ summary.date }}）
@@ -588,7 +626,7 @@
       </section>
 
       <!-- 统计分析 -->
-      <section v-else-if="view === 'stats'" class="page">
+      <section v-else-if="view === 'stats'" class="page page-stats">
         <div class="range-tabs">
           <button v-for="d in [7, 14, 30, 90]" :key="d" :class="{ on: statsDays === d }"
                   @click="statsDays = d; loadStats()">最近 {{ d }} 天</button>
@@ -628,7 +666,7 @@
       </section>
 
       <!-- AI 日报 -->
-      <section v-else-if="view === 'reports'" class="page">
+      <section v-else-if="view === 'reports'" class="page page-reports">
         <div class="card">
           <div class="card-title">
             AI 日报
@@ -648,7 +686,7 @@
       </section>
 
       <!-- 设置 -->
-      <section v-else-if="view === 'settings'" class="page">
+      <section v-else-if="view === 'settings'" class="page page-settings">
         <div class="card">
           <div class="card-title">个人资料</div>
           <div class="form-grid">
@@ -725,7 +763,7 @@
           </p>
         </div>
 
-        <div class="card">
+        <div class="card card-wide">
         <div class="card-title">
           识图提示词
           <button class="link-btn" @click="copyPrompt">复制</button>
@@ -853,8 +891,9 @@ if (!window.Chart) {
   document.write('<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"><\/script>');
 }
 </script>
-<script src="/js/fx.js?v=20261022d"></script>
-<script src="/js/app.js?v=20261022d"></script>
+<script src="/js/atmos.js?v=20261022i"></script>
+<script src="/js/fx.js?v=20261022i"></script>
+<script src="/js/app.js?v=20261022i"></script>
 <script>
   // 注册 Service Worker，让 Chrome 能把它装成独立应用。
   // 只在安全上下文注册：局域网 http 下浏览器本来就不允许，也没必要。

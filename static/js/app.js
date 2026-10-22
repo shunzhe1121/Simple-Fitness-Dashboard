@@ -42,15 +42,17 @@
     C.defaults.animation = { duration: 800, easing: "easeOutQuart" };
     C.defaults.animations.colors = false;
     C.defaults.animations.x = false;
-    C.defaults.elements.line.borderWidth = 2;
-    C.defaults.elements.line.tension = 0.34;
+    C.defaults.elements.line.borderWidth = 1.6;
+    C.defaults.elements.line.tension = 0.32;
     C.defaults.elements.line.fill = true;
-    C.defaults.elements.point.radius = 2.5;
-    C.defaults.elements.point.hoverRadius = 4.5;
-    C.defaults.elements.point.borderWidth = 0;
-    C.defaults.elements.bar.borderRadius = 4;
+    C.defaults.elements.line.cubicInterpolationMode = "monotone";
+    C.defaults.elements.point.radius = 0;
+    C.defaults.elements.point.hoverRadius = 4;
+    C.defaults.elements.point.hitRadius = 14;
+    C.defaults.elements.point.borderWidth = 2;
+    C.defaults.elements.bar.borderRadius = 0;
     C.defaults.elements.bar.borderSkipped = false;
-    C.defaults.elements.bar.maxBarThickness = 30;
+    C.defaults.elements.bar.maxBarThickness = 18;
   }
 
   const NAV_ITEMS = [
@@ -220,6 +222,12 @@
         const workout = (this.summary.workout.total.calories || 0);
         return Math.round(base + workout);
       },
+      // 目标还差多少（负值表示已经吃超）
+      remainingCalories() {
+        const goal = this.effectiveGoal;
+        if (!goal) return null;
+        return Math.round(goal - (this.summary.diet.total.calories || 0));
+      },
       // 手表实测总消耗：今天的还没同步完，取最近一次完整实测值
       measuredBurn() {
         return this.summary.tdee_measured || null;
@@ -256,13 +264,43 @@
       ringStyle() {
         const goal = this.effectiveGoal;
         const intake = this.summary.diet.total.calories || 0;
-        const r = 52;
-        const circ = 2 * Math.PI * r; // ≈326.7
+        const r = 86;
+        const circ = 2 * Math.PI * r;
         const pct = goal ? Math.min(intake / goal, 1) : 0;
         return {
           strokeDasharray: circ,
           strokeDashoffset: circ * (1 - pct),
         };
+      },
+      // 刻度环：60 格，已摄入的部分点亮。比纯圆弧更像仪表读数。
+      ringTicks() {
+        const total = 60;
+        const rOut = 101;
+        const rIn = 94;
+        const goal = this.effectiveGoal;
+        const intake = this.summary.diet.total.calories || 0;
+        const pct = goal ? Math.min(intake / goal, 1) : 0;
+        const out = [];
+        for (let i = 0; i < total; i++) {
+          const a = (i / total) * Math.PI * 2 - Math.PI / 2;
+          const major = i % 5 === 0;
+          const inner = major ? rIn - 4 : rIn;
+          out.push({
+            i,
+            major,
+            lit: (i + 0.5) / total <= pct,
+            x1: +(110 + Math.cos(a) * inner).toFixed(2),
+            y1: +(110 + Math.sin(a) * inner).toFixed(2),
+            x2: +(110 + Math.cos(a) * rOut).toFixed(2),
+            y2: +(110 + Math.sin(a) * rOut).toFixed(2),
+          });
+        }
+        return out;
+      },
+      // 页面编号，让顶栏标题像「第几号量表」而不是普通 h1
+      navIndex() {
+        const i = this.navItems.findIndex((n) => n.key === this.view);
+        return String((i < 0 ? 0 : i) + 1).padStart(2, "0");
       },
       macroBars() {
         const s = this.summary;
@@ -1282,27 +1320,27 @@
           align: "start",
           labels: {
             color: legendLabel,
-            boxWidth: 10,
-            boxHeight: 10,
-            padding: 14,
+            boxWidth: 8,
+            boxHeight: 8,
+            padding: 16,
             usePointStyle: true,
-            pointStyle: "circle",
-            font: { size: 12, weight: "500" },
+            pointStyle: "rectRounded",
+            font: { size: 11, weight: "500" },
           },
         };
 
         const scales = {
           x: {
-            grid: { color: grid, drawTicks: false },
+            grid: { display: false },
             border: { display: false },
-            ticks: { color: tick, padding: 8, maxTicksLimit: 10, font: { size: 11 } },
+            ticks: { color: tick, padding: 10, maxTicksLimit: 8, font: { size: 10.5 } },
           },
           y: {
-            grid: { color: grid, drawTicks: false },
+            grid: { color: grid, drawTicks: false, lineWidth: 1 },
             border: { display: false },
             beginAtZero: true,
             grace: "8%",
-            ticks: { color: tick, padding: 8, font: { size: 11 } },
+            ticks: { color: tick, padding: 10, maxTicksLimit: 5, font: { size: 10.5 } },
           },
         };
 
@@ -1403,14 +1441,14 @@
           ? cCalCtx.createLinearGradient(0, 0, 0, cCalCanvas.height || 280)
           : null;
         if (intakeGrad) {
-          intakeGrad.addColorStop(0, alpha(intake, .3));
+          intakeGrad.addColorStop(0, alpha(intake, .17));
           intakeGrad.addColorStop(1, alpha(intake, 0));
         }
         const burnGrad = cCalCtx
           ? cCalCtx.createLinearGradient(0, 0, 0, cCalCanvas.height || 280)
           : null;
         if (burnGrad) {
-          burnGrad.addColorStop(0, alpha(burn, .24));
+          burnGrad.addColorStop(0, alpha(burn, .12));
           burnGrad.addColorStop(1, alpha(burn, 0));
         }
         this.renderChart("calorieChart", {
@@ -1455,9 +1493,11 @@
                     cssVar("--chart-3", "#ffc247"),
                     cssVar("--chart-4", "#7aa2ff"),
                   ],
-                  borderColor: cssVar("--surface", "#121417"),
-                  borderWidth: 2,
-                  hoverOffset: 6,
+                  borderColor: cssVar("--bg", "#07080a"),
+                  borderWidth: 3,
+                  spacing: 2,
+                  hoverOffset: 4,
+                  cutout: "76%",
                 },
               ],
             },
@@ -1483,8 +1523,8 @@
                   data: catValues,
                   backgroundColor: alpha(bar, .62),
                   hoverBackgroundColor: bar,
-                  borderRadius: 3,
-                  maxBarThickness: 26,
+                  borderRadius: 0,
+                  maxBarThickness: 34,
                 },
               ],
             },
@@ -1502,7 +1542,7 @@
           ? wCtx.createLinearGradient(0, 0, 0, wCanvas.height || 280)
           : null;
         if (wGrad) {
-          wGrad.addColorStop(0, alpha(wColor, .28));
+          wGrad.addColorStop(0, alpha(wColor, .16));
           wGrad.addColorStop(1, alpha(wColor, 0));
         }
         this.renderChart("weightChart", {
