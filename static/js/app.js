@@ -109,7 +109,8 @@
         view: "today",
         navOpen: false,
         chatOpen: false,
-        theme: "auto",
+        // 默认浅色：纸感底 + 信号橙是这个界面的本色，暗色是需要主动选择的分支
+        theme: "light",
 
         // 日期
         selectedDate: "",
@@ -264,38 +265,15 @@
       ringStyle() {
         const goal = this.effectiveGoal;
         const intake = this.summary.diet.total.calories || 0;
-        const r = 86;
+        const r = 88;
         const circ = 2 * Math.PI * r;
+        // 只画 270°，与 .gauge-track 的 414.7 / 138.2 同口径
+        const arc = circ * 0.75;
         const pct = goal ? Math.min(intake / goal, 1) : 0;
+        const len = arc * pct;
         return {
-          strokeDasharray: circ,
-          strokeDashoffset: circ * (1 - pct),
+          strokeDasharray: `${len.toFixed(2)} ${circ.toFixed(2)}`,
         };
-      },
-      // 刻度环：60 格，已摄入的部分点亮。比纯圆弧更像仪表读数。
-      ringTicks() {
-        const total = 60;
-        const rOut = 101;
-        const rIn = 94;
-        const goal = this.effectiveGoal;
-        const intake = this.summary.diet.total.calories || 0;
-        const pct = goal ? Math.min(intake / goal, 1) : 0;
-        const out = [];
-        for (let i = 0; i < total; i++) {
-          const a = (i / total) * Math.PI * 2 - Math.PI / 2;
-          const major = i % 5 === 0;
-          const inner = major ? rIn - 4 : rIn;
-          out.push({
-            i,
-            major,
-            lit: (i + 0.5) / total <= pct,
-            x1: +(110 + Math.cos(a) * inner).toFixed(2),
-            y1: +(110 + Math.sin(a) * inner).toFixed(2),
-            x2: +(110 + Math.cos(a) * rOut).toFixed(2),
-            y2: +(110 + Math.sin(a) * rOut).toFixed(2),
-          });
-        }
-        return out;
       },
       // 页面编号，让顶栏标题像「第几号量表」而不是普通 h1
       navIndex() {
@@ -429,7 +407,7 @@
     },
 
     mounted() {
-      this.theme = localStorage.getItem("fit-theme") || "auto";
+      this.theme = localStorage.getItem("fit-theme") || "light";
       this.applyTheme();
       // 动效/音效偏好从 localStorage 读回来，界面开关只是镜像
       if (window.FX) {
@@ -682,12 +660,18 @@
       },
       applyTheme() {
         const html = document.documentElement;
-        if (this.theme === "light") html.setAttribute("data-theme", "light");
-        else if (this.theme === "dark") html.setAttribute("data-theme", "dark");
-        else html.removeAttribute("data-theme"); // auto → rely on @media query
+        // :root 本身就是浅色，auto/light 都不用挂属性；只有 dark 需要显式挂
+        if (this.theme === "dark") html.setAttribute("data-theme", "dark");
+        else if (this.theme === "auto") html.removeAttribute("data-theme");
+        else html.setAttribute("data-theme", "light");
+        const meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) {
+          meta.setAttribute("content",
+            this.isDark() ? "#080a0b" : "#ebe7dd");
+        }
       },
       cycleTheme() {
-        const order = ["auto", "light", "dark"];
+        const order = ["light", "dark", "auto"];
         this.theme = order[(order.indexOf(this.theme) + 1) % order.length];
         localStorage.setItem("fit-theme", this.theme);
         this.applyTheme();
@@ -1521,7 +1505,7 @@
                 {
                   label: "min",
                   data: catValues,
-                  backgroundColor: alpha(bar, .62),
+                  backgroundColor: alpha(bar, .78),
                   hoverBackgroundColor: bar,
                   borderRadius: 0,
                   maxBarThickness: 34,

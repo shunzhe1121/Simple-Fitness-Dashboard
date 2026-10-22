@@ -10,19 +10,19 @@ It ships in two forms — a web app (FastAPI + Vue 3) and an Android app (Capaci
 
 #### Desktop · Today's overview
 
-![Desktop today's overview](assets/screenshots/desktop-today.png)
+![Desktop today's overview](assets/screenshots/desktop-today.jpg)
 
 #### Mobile · Today's overview
 
-<p align="center"><img src="assets/screenshots/mobile-today.png" width="320" alt="Mobile today's overview"></p>
+<p align="center"><img src="assets/screenshots/mobile-today.jpg" width="320" alt="Mobile today's overview"></p>
 
 #### Desktop · Statistics
 
-![Desktop statistics](assets/screenshots/desktop-stats.png)
+![Desktop statistics](assets/screenshots/desktop-stats.jpg)
 
 #### Mobile · Statistics
 
-<p align="center"><img src="assets/screenshots/mobile-stats.png" width="320" alt="Mobile statistics"></p>
+<p align="center"><img src="assets/screenshots/mobile-stats.jpg" width="320" alt="Mobile statistics"></p>
 
 ## Installation
 

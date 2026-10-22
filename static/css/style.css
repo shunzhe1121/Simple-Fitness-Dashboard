@@ -31,131 +31,8 @@
   --ease: cubic-bezier(.16, 1, .3, 1);
   --ease-damp: cubic-bezier(.22, 1.14, .32, 1);
 
-  /* ---- 暗色（默认）：石墨 + 单一光源 ---- */
-  color-scheme: dark;
-  --bg: #07080a;
-  --surface: #0e1013;
-  --surface-2: #14171b;
-  --surface-3: #1d2127;
-  --line: rgba(255, 255, 255, .075);
-  --line-strong: rgba(255, 255, 255, .16);
-  --text: #f5f6f8;
-  --text-2: #a9afb9;
-  --text-3: #848b96;
-  --accent: #ff5a32;
-  --accent-ink: #0a0605;
-  --accent-soft: rgba(255, 90, 50, .13);
-  --fx-ink: rgba(255, 255, 255, .2);
-  --ok: #3ad0a4;
-  --warn: #ffc247;
-  --danger: #ff5940;
-  --grad-a: #ff5a32;
-  --grad-b: #ffb170;
-
-  --card-grad:
-    linear-gradient(158deg, rgba(255, 255, 255, .065) 0%, rgba(255, 255, 255, .015) 42%, rgba(255, 255, 255, 0) 74%),
-    linear-gradient(180deg, #0f1215, #0a0c0f);
-  --card-grad-soft:
-    linear-gradient(158deg, rgba(255, 255, 255, .04) 0%, rgba(255, 255, 255, 0) 55%),
-    linear-gradient(180deg, #0d0f12, #0b0d10);
-
-  --shadow-card:
-    inset 0 1px 0 rgba(255, 255, 255, .07),
-    0 1px 2px rgba(0, 0, 0, .55),
-    0 30px 70px -42px rgba(0, 0, 0, .95);
-  --shadow-pop:
-    0 32px 90px -30px rgba(0, 0, 0, .95),
-    0 2px 10px rgba(0, 0, 0, .55),
-    inset 0 1px 0 rgba(255, 255, 255, .08);
-
-  --input-bg: rgba(255, 255, 255, .035);
-  --hover: rgba(255, 255, 255, .045);
-
-  --grain-opacity: .022;
-  --bloom-a: rgba(255, 90, 50, .17);
-  --bloom-b: rgba(88, 120, 255, .10);
-  --bloom-c: rgba(0, 210, 170, .06);
-  --glass: rgba(10, 12, 15, .72);
-
-  --hair: linear-gradient(90deg, rgba(255, 255, 255, .18), rgba(255, 255, 255, 0));
-  --tick: rgba(255, 255, 255, .22);
-  --tick-dim: rgba(255, 255, 255, .085);
-  --ring-glow: drop-shadow(0 0 10px rgba(255, 90, 50, .55));
-
-  /* 图表专用（必须纯色，canvas 不吃 color-mix） */
-  --chart-grid: rgba(255, 255, 255, .05);
-  --chart-tick: #848b96;
-  --chart-1: #ff5a32;
-  --chart-2: #3ad0a4;
-  --chart-3: #d9a05b;
-  --chart-4: #8ba0c9;
-  --chart-5: #ff5940;
-
-  /* 旧别名，reports.html 仍在用 */
-  --card: var(--surface);
-  --primary: var(--accent);
-  --border: var(--line);
-}
-
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme="dark"]) {
-    color-scheme: light;
-    --bg: #ebe7dd;
-    --surface: #fbfaf6;
-    --surface-2: #f4f1e9;
-    --surface-3: #e7e2d7;
-    --line: rgba(30, 26, 20, .09);
-    --line-strong: rgba(30, 26, 20, .19);
-    --text: #131519;
-    --text-2: #464d58;
-    --text-3: #6b727d;
-    --accent: #d8471f;
-    --accent-ink: #fffaf7;
-    --accent-soft: rgba(216, 71, 31, .08);
-    --fx-ink: rgba(20, 16, 10, .14);
-    --ok: #0a7f5f;
-    --warn: #96610c;
-    --danger: #bf3a28;
-    --grad-a: #d8471f;
-    --grad-b: #ef9440;
-
-    --card-grad:
-      linear-gradient(158deg, #ffffff 0%, #fbfaf5 46%, #f7f4ed 100%);
-    --card-grad-soft:
-      linear-gradient(158deg, #fffefb 0%, #faf8f2 100%);
-    --shadow-card:
-      inset 0 1px 0 #ffffff,
-      0 1px 2px rgba(48, 38, 22, .07),
-      0 26px 54px -36px rgba(48, 38, 22, .55);
-    --shadow-pop:
-      0 30px 70px -26px rgba(48, 38, 22, .45),
-      0 2px 8px rgba(48, 38, 22, .1);
-
-    --input-bg: rgba(255, 255, 255, .72);
-    --hover: rgba(30, 26, 20, .038);
-
-    --grain-opacity: .05;
-    --bloom-a: rgba(216, 71, 31, .10);
-    --bloom-b: rgba(70, 108, 210, .06);
-    --bloom-c: rgba(0, 160, 130, .05);
-    --glass: rgba(250, 248, 242, .76);
-
-    --hair: linear-gradient(90deg, rgba(30, 26, 20, .22), rgba(30, 26, 20, 0));
-    --tick: rgba(30, 26, 20, .3);
-    --tick-dim: rgba(30, 26, 20, .1);
-    --ring-glow: none;
-
-    --chart-grid: rgba(30, 26, 20, .07);
-    --chart-tick: #767d88;
-    --chart-1: #d8471f;
-    --chart-2: #0a7f5f;
-    --chart-3: #a8761f;
-    --chart-4: #4a6b9e;
-    --chart-5: #bf3a28;
-  }
-}
-
-:root[data-theme="light"] {
+  /* ---- 亮色（默认）：骨白纸 + 信号橙 ----
+     纸感底色比纯白更耐看，橙压在暖白上才是印刷品的红，压在中性灰上会脏 */
   color-scheme: light;
   --bg: #ebe7dd;
   --surface: #fbfaf6;
@@ -169,6 +46,7 @@
   --accent: #d8471f;
   --accent-ink: #fffaf7;
   --accent-soft: rgba(216, 71, 31, .08);
+  --accent-glow: rgba(216, 71, 31, .18);
   --fx-ink: rgba(20, 16, 10, .14);
   --ok: #0a7f5f;
   --warn: #96610c;
@@ -200,8 +78,10 @@
   --hair: linear-gradient(90deg, rgba(30, 26, 20, .22), rgba(30, 26, 20, 0));
   --tick: rgba(30, 26, 20, .3);
   --tick-dim: rgba(30, 26, 20, .1);
+  --track: rgba(30, 26, 20, .075);
   --ring-glow: none;
 
+  /* 图表专用（必须纯色，canvas 不吃 color-mix） */
   --chart-grid: rgba(30, 26, 20, .07);
   --chart-tick: #767d88;
   --chart-1: #d8471f;
@@ -209,10 +89,76 @@
   --chart-3: #a8761f;
   --chart-4: #4a6b9e;
   --chart-5: #bf3a28;
+
+  /* 旧别名，reports.html 仍在用 */
+  --card: var(--surface);
+  --primary: var(--accent);
+  --border: var(--line);
 }
 
+/* ---- 暗色：石墨 + 琥珀仪表灯 ----
+   低亮度下橙色（#ff5a32）会像警报灯，刺眼且显廉价；换成琥珀 #ffb340，
+   更接近老式仪器/示波器的荧光，与石墨底共存时是暖金而不是橘 */
 :root[data-theme="dark"] {
   color-scheme: dark;
+  --bg: #080a0b;
+  --surface: #101315;
+  --surface-2: #16191c;
+  --surface-3: #22262b;
+  --line: rgba(255, 255, 255, .07);
+  --line-strong: rgba(255, 255, 255, .155);
+  --text: #f3f4f6;
+  --text-2: #a8aeb8;
+  --text-3: #878e99;
+  --accent: #ffb340;
+  --accent-ink: #140c02;
+  --accent-soft: rgba(255, 179, 64, .11);
+  --accent-glow: rgba(255, 179, 64, .3);
+  --fx-ink: rgba(255, 255, 255, .2);
+  --ok: #3ad0a4;
+  --warn: #f4cf5e;
+  --danger: #ff6f5a;
+  --grad-a: #ffb340;
+  --grad-b: #ff7d2e;
+
+  --card-grad:
+    linear-gradient(158deg, rgba(255, 255, 255, .06) 0%, rgba(255, 255, 255, .014) 42%, rgba(255, 255, 255, 0) 74%),
+    linear-gradient(180deg, #121517, #0b0d0f);
+  --card-grad-soft:
+    linear-gradient(158deg, rgba(255, 255, 255, .038) 0%, rgba(255, 255, 255, 0) 55%),
+    linear-gradient(180deg, #0f1113, #0c0e10);
+
+  --shadow-card:
+    inset 0 1px 0 rgba(255, 255, 255, .065),
+    0 1px 2px rgba(0, 0, 0, .55),
+    0 30px 70px -42px rgba(0, 0, 0, .95);
+  --shadow-pop:
+    0 32px 90px -30px rgba(0, 0, 0, .95),
+    0 2px 10px rgba(0, 0, 0, .55),
+    inset 0 1px 0 rgba(255, 255, 255, .08);
+
+  --input-bg: rgba(255, 255, 255, .035);
+  --hover: rgba(255, 255, 255, .045);
+
+  --grain-opacity: .022;
+  --bloom-a: rgba(255, 179, 64, .12);
+  --bloom-b: rgba(88, 120, 255, .08);
+  --bloom-c: rgba(0, 210, 170, .055);
+  --glass: rgba(11, 13, 15, .72);
+
+  --hair: linear-gradient(90deg, rgba(255, 255, 255, .18), rgba(255, 255, 255, 0));
+  --tick: rgba(255, 255, 255, .22);
+  --tick-dim: rgba(255, 255, 255, .085);
+  --track: rgba(255, 255, 255, .06);
+  --ring-glow: drop-shadow(0 0 7px rgba(255, 179, 64, .3));
+
+  --chart-grid: rgba(255, 255, 255, .05);
+  --chart-tick: #878e99;
+  --chart-1: #ffb340;
+  --chart-2: #3ad0a4;
+  --chart-3: #e0906a;
+  --chart-4: #8ba0c9;
+  --chart-5: #ff6f5a;
 }
 
 /* ---------------------------------------------------------------- 基础 */
@@ -560,12 +506,10 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; colo
 .date-input::-webkit-calendar-picker-indicator {
   opacity: .4;
   cursor: pointer;
-  filter: var(--cal-filter, invert(1));
+  filter: none;
 }
-:root[data-theme="light"] .date-input::-webkit-calendar-picker-indicator { filter: none; }
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme="dark"]) .date-input::-webkit-calendar-picker-indicator { filter: none; }
-}
+/* 原生日期图标是深色描边，只有暗底才需要反色 */
+:root[data-theme="dark"] .date-input::-webkit-calendar-picker-indicator { filter: invert(1); }
 
 .scroll {
   flex: 1;
@@ -711,9 +655,9 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; colo
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   width: 100%;
-  max-width: 286px;
+  max-width: 258px;
   margin: 0 auto;
 }
 
@@ -733,37 +677,40 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; colo
   overflow: visible;
 }
 
-.gauge-ticks line {
-  stroke: var(--tick-dim);
-  stroke-width: 1.15;
-  stroke-linecap: round;
-  transition: stroke .4s ease, opacity .4s ease;
-}
-.gauge-ticks line.major { stroke-width: 1.5; }
-.gauge-ticks line.lit {
-  stroke: var(--accent);
-  filter: drop-shadow(0 0 3px rgba(255, 90, 50, .5));
-}
-
-.gauge-track {
-  fill: none;
-  stroke: var(--tick-dim);
-  stroke-width: 1;
-}
-
+/* 270° 开口环：底部留 90° 缺口放目标值。
+   闭环只会变成健康 App 的甜甜圈，开口才像一块真的仪表——
+   缺口同时吃掉了「环下面飘一行小字」这个悬空元素。
+   几何：r=88 → 周长 553，画 270°（414.7），余下 138.2 就是缺口。 */
+.gauge-track,
 .gauge-fill {
   fill: none;
-  stroke: url(#ringGrad);
-  stroke-width: 2.5;
+  stroke-width: 4.5;
   stroke-linecap: round;
-  transform: rotate(-90deg);
-  transform-origin: 50% 50%;
+}
+
+/* 底环走完整一圈当盘面，缺口只出现在进度弧上——
+   底环也打缺口的话，缺口两侧会各露出半截灰头，像环断了 */
+.gauge-track {
+  stroke: var(--track);
+}
+
+/* 进度弧：圆头 + 渐变，是整块屏幕上唯一允许发光的东西 */
+.gauge-fill {
+  stroke: url(#ringGrad);
   filter: var(--ring-glow, none);
-  transition: stroke-dashoffset .9s var(--ease-damp), stroke .3s ease;
+  /* 旋转锚点必须走 fill-box + center：viewBox 不从 0 0 起时，
+     50% 50% 指的是 viewBox 中心而不是圆心，弧会整体偏移 24 个单位 */
+  transform-box: fill-box;
+  transform-origin: center;
+  /* 起点从 3 点钟转到 135°，顺时针画到 45°，开口朝正下方 */
+  transform: rotate(135deg);
+  transition: stroke-dasharray .9s var(--ease-damp), stroke .3s ease;
 }
 
 .gauge-read {
   position: relative;
+  /* 弧的视觉重心在几何中心之上，读数跟着上提才不显得压在下巴上 */
+  margin-top: -20px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -777,7 +724,7 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; colo
   letter-spacing: -.035em;
   font-variant-numeric: tabular-nums;
   color: var(--text);
-  text-shadow: 0 0 34px rgba(255, 90, 50, .28);
+  /* 读数本身不发光，光只在弧上 */
 }
 
 .gauge-unit {
@@ -789,11 +736,18 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; colo
   color: var(--text-3);
 }
 
+/* 目标值落在环的缺口里，替掉原来悬在环下方的那行浮动小字 */
 .gauge-target {
-  text-align: center;
+  position: absolute;
+  left: 50%;
+  bottom: 11%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 11px;
   letter-spacing: .06em;
-  color: var(--text-3);
+  color: var(--text-2);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -1942,7 +1896,6 @@ select {
 
 .kpi:first-child .kpi-value {
   font-size: 46px;
-  text-shadow: 0 0 30px rgba(255, 90, 50, .25);
 }
 .kpi:first-child {
   background:
@@ -2404,17 +2357,21 @@ select {
   .date-input { font-size: 12px; width: 104px; padding: 2px; }
   .date-arrow { width: 22px; height: 22px; }
   .hero {
-    grid-template-columns: 1fr;
+    /* minmax(0, …) 不能省：1fr 的最小尺寸是 max-content，
+       读数三格 / 宏量数值这类不换行的内容会顶破容器 */
+    grid-template-columns: minmax(0, 1fr);
     gap: 26px;
     padding: 26px 22px;
     text-align: left;
   }
-  .gauge { max-width: 240px; }
+  .gauge { max-width: 216px; }
   .hero-macros { flex-direction: column; gap: 16px; }
   .today-rail { flex-direction: column; }
   .today-rail > .card { width: 100%; }
   .kpi-grid { grid-template-columns: 1fr 1fr; }
   .kpi:first-child { grid-column: 1 / -1; }
+  /* 首格跨两列后，若总数为偶数，最后一格会落单留半格空洞，让它撑满一行 */
+  .kpi:last-child:nth-child(even) { grid-column: 1 / -1; }
   .kpi:nth-child(4) { border-top: 1px solid var(--line); }
   .goal-pop, .deficit-pop {
     position: static;

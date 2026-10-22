@@ -10,19 +10,19 @@ Simple Fitness Recorder 是一个本地优先的健身记录工具，帮助你�
 
 #### 桌面端 · 今日总览
 
-![网页端今日总览](assets/screenshots/desktop-today.png)
+![网页端今日总览](assets/screenshots/desktop-today.jpg)
 
 #### 手机端 · 今日总览
 
-<p align="center"><img src="assets/screenshots/mobile-today.png" width="320" alt="手机端今日总览"></p>
+<p align="center"><img src="assets/screenshots/mobile-today.jpg" width="320" alt="手机端今日总览"></p>
 
 #### 桌面端 · 统计分析
 
-![网页端统计分析](assets/screenshots/desktop-stats.png)
+![网页端统计分析](assets/screenshots/desktop-stats.jpg)
 
 #### 手机端 · 统计分析
 
-<p align="center"><img src="assets/screenshots/mobile-stats.png" width="320" alt="手机端统计分析"></p>
+<p align="center"><img src="assets/screenshots/mobile-stats.jpg" width="320" alt="手机端统计分析"></p>
 
 ## 安装
 
