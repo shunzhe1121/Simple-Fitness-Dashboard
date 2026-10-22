@@ -9,28 +9,48 @@
   // 图表实例放在模块级，避免被 Vue 响应式包裹导致 Chart.js 内部异常
   const charts = {};
 
+  // 图表配色统一从 CSS 变量读，改主题只要改 style.css 一处
+  function cssVar(name, fallback) {
+    try {
+      const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+      return v || fallback;
+    } catch (e) {
+      return fallback;
+    }
+  }
+
+  // canvas 渐变只认 rgba，CSS 变量是 hex —— 这里把 hex 拆成带透明度的 rgba
+  function alpha(hex, a) {
+    const h = String(hex || "").replace("#", "").trim();
+    if (h.length !== 6) return hex;
+    const n = parseInt(h, 16);
+    if (Number.isNaN(n)) return hex;
+    return "rgba(" + ((n >> 16) & 255) + "," + ((n >> 8) & 255) + "," + (n & 255) + "," + a + ")";
+  }
+
   // Chart.js 全局默认值：统一字体、动画、元素与 tooltip 视觉
+
   function applyChartDefaults() {
     if (!window.Chart) return;
     const C = window.Chart;
     const fontFamily =
       '-apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif';
     C.defaults.font.family = fontFamily;
-    C.defaults.font.size = 12;
+    C.defaults.font.size = 11;
     C.defaults.font.weight = "500";
-    C.defaults.color = "#475569";
-    C.defaults.animation = { duration: 700, easing: "easeOutQuart" };
+    C.defaults.color = cssVar("--chart-tick", "#7d848e");
+    C.defaults.animation = { duration: 800, easing: "easeOutQuart" };
     C.defaults.animations.colors = false;
     C.defaults.animations.x = false;
-    C.defaults.elements.line.borderWidth = 2.5;
-    C.defaults.elements.line.tension = 0.35;
+    C.defaults.elements.line.borderWidth = 2;
+    C.defaults.elements.line.tension = 0.34;
     C.defaults.elements.line.fill = true;
-    C.defaults.elements.point.radius = 3;
-    C.defaults.elements.point.hoverRadius = 5;
+    C.defaults.elements.point.radius = 2.5;
+    C.defaults.elements.point.hoverRadius = 4.5;
     C.defaults.elements.point.borderWidth = 0;
-    C.defaults.elements.bar.borderRadius = 8;
+    C.defaults.elements.bar.borderRadius = 4;
     C.defaults.elements.bar.borderSkipped = false;
-    C.defaults.elements.bar.maxBarThickness = 36;
+    C.defaults.elements.bar.maxBarThickness = 30;
   }
 
   const NAV_ITEMS = [
@@ -1154,16 +1174,16 @@
       // ---------------------------------------------------------- 图表
       // 统一的图表外观基线：字体、配色、tooltip、图例、padding 由 applyChartDefaults
       // + baseOptions() 一并决定。实例只填数据。
-      baseOptions(kind) {
-        const dark = this.isDark();
-        const grid = dark ? "rgba(148,163,184,.18)" : "rgba(15,23,42,.06)";
-        const tick = dark ? "#cbd5e1" : "#64748b";
-        const legendLabel = dark ? "#e2e8f0" : "#334155";
+      baseOptions(kind, opts) {
+        // 全部取 CSS 变量，主题一动图表跟着变，不用在这里维护第二套配色
+        const grid = cssVar("--chart-grid", "rgba(255,255,255,.055)");
+        const tick = cssVar("--chart-tick", "#7d848e");
+        const legendLabel = cssVar("--text-2", "#a1a7b1");
 
-        // 玻璃感 tooltip：跟随主题给一组 alpha 适配
-        const tooltipBg = dark ? "rgba(15,23,42,.92)" : "rgba(15,23,42,.88)";
-        const tooltipText = "#f8fafc";
-        const tooltipTitle = "#cbd5e1";
+        const tooltipBg = cssVar("--surface-3", "#1f2227");
+        const tooltipText = cssVar("--text", "#f2f3f5");
+        const tooltipTitle = cssVar("--text-3", "#7d848e");
+        const tooltipBorder = cssVar("--line-strong", "rgba(255,255,255,.14)");
 
         const legend = {
           position: "bottom",
@@ -1198,17 +1218,17 @@
           backgroundColor: tooltipBg,
           titleColor: tooltipTitle,
           bodyColor: tooltipText,
-          borderColor: "transparent",
-          borderWidth: 0,
+          borderColor: tooltipBorder,
+          borderWidth: 1,
           padding: { x: 12, y: 10 },
-          cornerRadius: 10,
+          cornerRadius: 8,
           displayColors: true,
-          boxWidth: 8,
-          boxHeight: 8,
+          boxWidth: 7,
+          boxHeight: 7,
           usePointStyle: true,
-          titleFont: { size: 12, weight: "600" },
+          titleFont: { size: 10.5, weight: "600" },
           bodyFont: { size: 12, weight: "500" },
-          caretSize: 6,
+          caretSize: 5,
           caretPadding: 8,
         };
 
@@ -1221,6 +1241,10 @@
         };
 
         if (kind === "line" || kind === "bar") {
+          // 体重这类趋势图不该从 0 起算，否则几公斤的变化会被压成一条直线
+          const zero = !(opts && opts.zero === false);
+          scales.y.beginAtZero = zero;
+          scales.y.grace = zero ? "8%" : "16%";
           options.scales = scales;
         }
         if (kind === "bar") {
@@ -1246,12 +1270,13 @@
         if (!this.bodySeries) return;
         const canvas = this.$refs.bodyChart;
         const ctx = canvas ? canvas.getContext("2d") : null;
+        const w = cssVar("--chart-2", "#35d0a5");
         const grad = ctx
           ? ctx.createLinearGradient(0, 0, 0, canvas.height || 280)
           : null;
         if (grad) {
-          grad.addColorStop(0, "rgba(16,185,129,.35)");
-          grad.addColorStop(1, "rgba(16,185,129,0)");
+          grad.addColorStop(0, alpha(w, .3));
+          grad.addColorStop(1, alpha(w, 0));
         }
         this.renderChart("bodyChart", {
           type: "line",
@@ -1261,15 +1286,15 @@
               {
                 label: "体重 kg",
                 data: this.bodySeries.weight,
-                borderColor: "#10b981",
-                backgroundColor: grad || "rgba(16,185,129,.18)",
-                pointBackgroundColor: "#10b981",
+                borderColor: w,
+                backgroundColor: grad || alpha(w, .16),
+                pointBackgroundColor: w,
                 spanGaps: true,
                 fill: true,
               },
             ],
           },
-          options: this.baseOptions("line"),
+          options: this.baseOptions("line", { zero: false }),
         });
       },
       renderStatsCharts() {
@@ -1277,22 +1302,24 @@
         if (!s) return;
         const days = s.series.days;
 
-        // 摄入 / 消耗两条线
+        // 摄入 / 消耗两条线：橙 = 吃进来，蓝 = 练出去
+        const intake = cssVar("--chart-1", "#ff5c33");
+        const burn = cssVar("--chart-4", "#7aa2ff");
         const cCalCanvas = this.$refs.calorieChart;
         const cCalCtx = cCalCanvas ? cCalCanvas.getContext("2d") : null;
         const intakeGrad = cCalCtx
           ? cCalCtx.createLinearGradient(0, 0, 0, cCalCanvas.height || 280)
           : null;
         if (intakeGrad) {
-          intakeGrad.addColorStop(0, "rgba(245,158,11,.32)");
-          intakeGrad.addColorStop(1, "rgba(245,158,11,0)");
+          intakeGrad.addColorStop(0, alpha(intake, .3));
+          intakeGrad.addColorStop(1, alpha(intake, 0));
         }
         const burnGrad = cCalCtx
           ? cCalCtx.createLinearGradient(0, 0, 0, cCalCanvas.height || 280)
           : null;
         if (burnGrad) {
-          burnGrad.addColorStop(0, "rgba(239,68,68,.28)");
-          burnGrad.addColorStop(1, "rgba(239,68,68,0)");
+          burnGrad.addColorStop(0, alpha(burn, .24));
+          burnGrad.addColorStop(1, alpha(burn, 0));
         }
         this.renderChart("calorieChart", {
           type: "line",
@@ -1302,17 +1329,17 @@
               {
                 label: "摄入",
                 data: s.series.diet_calories,
-                borderColor: "#f59e0b",
-                backgroundColor: intakeGrad || "rgba(245,158,11,.18)",
-                pointBackgroundColor: "#f59e0b",
+                borderColor: intake,
+                backgroundColor: intakeGrad || alpha(intake, .16),
+                pointBackgroundColor: intake,
                 fill: true,
               },
               {
                 label: "训练消耗",
                 data: s.series.workout_calories,
-                borderColor: "#ef4444",
-                backgroundColor: burnGrad || "rgba(239,68,68,.18)",
-                pointBackgroundColor: "#ef4444",
+                borderColor: burn,
+                backgroundColor: burnGrad || alpha(burn, .16),
+                pointBackgroundColor: burn,
                 fill: true,
               },
             ],
@@ -1331,10 +1358,14 @@
               datasets: [
                 {
                   data: [ms.protein_share || 0, ms.fat_share || 0, ms.carbs_share || 0],
-                  backgroundColor: ["#3b82f6", "#f59e0b", "#10b981"],
-                  borderColor: this.isDark() ? "#1e293b" : "#ffffff",
+                  backgroundColor: [
+                    cssVar("--chart-1", "#ff5c33"),
+                    cssVar("--chart-3", "#ffc247"),
+                    cssVar("--chart-4", "#7aa2ff"),
+                  ],
+                  borderColor: cssVar("--surface", "#121417"),
                   borderWidth: 2,
-                  hoverOffset: 8,
+                  hoverOffset: 6,
                 },
               ],
             },
@@ -1344,12 +1375,12 @@
           this.clearChart("macroChart");
         }
 
-        // 训练部位分布
+        // 训练部位分布：单系列柱，统一用强调色，避免八种颜色互相抢
         const cat = s.category_minutes || {};
         const catLabels = Object.keys(cat);
         const catValues = Object.values(cat);
         if (catLabels.length) {
-          const palette = ["#8b5cf6", "#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#06b6d4", "#ec4899", "#6366f1"];
+          const bar = cssVar("--chart-1", "#ff5c33");
           this.renderChart("categoryChart", {
             type: "bar",
             data: {
@@ -1358,8 +1389,10 @@
                 {
                   label: "min",
                   data: catValues,
-                  backgroundColor: catLabels.map((_, i) => palette[i % palette.length]),
-                  hoverBackgroundColor: catLabels.map((_, i) => palette[i % palette.length]),
+                  backgroundColor: alpha(bar, .62),
+                  hoverBackgroundColor: bar,
+                  borderRadius: 3,
+                  maxBarThickness: 26,
                 },
               ],
             },
@@ -1372,12 +1405,13 @@
         // 体重曲线
         const wCanvas = this.$refs.weightChart;
         const wCtx = wCanvas ? wCanvas.getContext("2d") : null;
+        const wColor = cssVar("--chart-2", "#35d0a5");
         const wGrad = wCtx
           ? wCtx.createLinearGradient(0, 0, 0, wCanvas.height || 280)
           : null;
         if (wGrad) {
-          wGrad.addColorStop(0, "rgba(16,185,129,.3)");
-          wGrad.addColorStop(1, "rgba(16,185,129,0)");
+          wGrad.addColorStop(0, alpha(wColor, .28));
+          wGrad.addColorStop(1, alpha(wColor, 0));
         }
         this.renderChart("weightChart", {
           type: "line",
@@ -1387,15 +1421,15 @@
               {
                 label: "体重 kg",
                 data: s.series.weight,
-                borderColor: "#10b981",
-                backgroundColor: wGrad || "rgba(16,185,129,.18)",
-                pointBackgroundColor: "#10b981",
+                borderColor: wColor,
+                backgroundColor: wGrad || alpha(wColor, .16),
+                pointBackgroundColor: wColor,
                 spanGaps: true,
                 fill: true,
               },
             ],
           },
-          options: this.baseOptions("line"),
+          options: this.baseOptions("line", { zero: false }),
         });
       },
       clearChart(refName) {

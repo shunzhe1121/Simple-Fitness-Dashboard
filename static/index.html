@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#2f6df6">
+<meta name="theme-color" content="#0a0b0d" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f4f1eb" media="(prefers-color-scheme: light)">
 <!-- 手机「添加到主屏幕」后像应用一样全屏打开，不带浏览器地址栏 -->
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -13,7 +14,7 @@
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 <link rel="icon" href="/icons/icon-192.png">
-<link rel="stylesheet" href="/css/style.css?v=20261014a">
+<link rel="stylesheet" href="/css/style.css?v=20261022b">
 </head>
 <body>
 <div id="app" class="app" :data-theme="theme === 'auto' ? null : theme" v-cloak>
@@ -64,7 +65,14 @@
           <div class="card ring-card">
             <div class="card-title">热量摄入</div>
             <div class="ring-wrap">
-              <svg viewBox="0 0 120 120" class="ring">
+              <svg viewBox="0 0 120 120" class="ring" aria-hidden="true">
+                <defs>
+                  <linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0%" class="ring-grad-a"></stop>
+                    <stop offset="100%" class="ring-grad-b"></stop>
+                  </linearGradient>
+                </defs>
+                <circle cx="60" cy="60" r="58.5" class="ring-ticks"></circle>
                 <circle cx="60" cy="60" r="52" class="ring-track"></circle>
                 <circle cx="60" cy="60" r="52" class="ring-fill"
                         :style="ringStyle"></circle>
@@ -183,7 +191,7 @@
                     {{ fmt(m.value, 1) }}<template v-if="m.goal"> / {{ fmt(m.goal, 0) }}</template> g
                   </span>
                 </div>
-                <div class="bar"><div class="bar-fill" :style="{ width: m.percent + '%', background: m.color }"></div></div>
+                <div class="bar"><div class="bar-fill" :class="'m-' + m.key" :style="{ width: m.percent + '%' }"></div></div>
               </div>
             </div>
           </div>
@@ -806,7 +814,7 @@ if (!window.Chart) {
   document.write('<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"><\/script>');
 }
 </script>
-<script src="/js/app.js?v=20261014a"></script>
+<script src="/js/app.js?v=20261022b"></script>
 <script>
   // 注册 Service Worker，让 Chrome 能把它装成独立应用。
   // 只在安全上下文注册：局域网 http 下浏览器本来就不允许，也没必要。
